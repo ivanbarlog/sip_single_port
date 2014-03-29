@@ -237,6 +237,34 @@ int th_msg_received(void *data)
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
+	        struct sockaddr_in address;
+		unsigned short port = 30000;
+
+        	memset((char *) &address, 0, sizeof(address));
+
+	        address.sin_family = AF_INET;
+	        address.sin_addr.s_addr = inet_addr("192.168.11.131");
+        	address.sin_port = htons(port);
+
+
+	        int nonBlocking = 1;
+		if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
+		{
+			LM_DBG("failed to set non-blocking\n");
+			goto done;
+		}
+
+		char * data2 = "hovno";
+
+		int sent_bytes = sendto(handle, data2, strlen(data2), 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
+
+		if (sent_bytes != strlen(data2))
+        	{
+                	LM_DBG("failed to send packet\n");
+                	goto done;
+        	}
+
+
 	if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
 	{
 		LM_DBG("\nPRIJATA SPRAVA JE RTP PACKET\n\n");
@@ -259,33 +287,6 @@ int th_msg_received(void *data)
                 LM_DBG("\nHEX:\n#####\n%s\n#####\n\n", buf_str);
 
                 pkg_free(buf_ptr);
-
-	        struct sockaddr_in address;
-		unsigned short port = 30000;
-
-        	memset((char *) &address, 0, sizeof(address));
-
-	        address.sin_family = AF_INET;
-	        address.sin_addr.s_addr = inet_addr("192.168.11.131");
-        	address.sin_port = htons(port);
-
-
-	        int nonBlocking = 1;
-		if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
-		{
-			LM_DBG("failed to set non-blocking\n");
-			goto done;
-		}
-
-		char * data = "hovno";
-
-		int sent_bytes = sendto(handle, data, strlen(data), 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
-
-		if (sent_bytes != strlen(data))
-        	{
-                	LM_DBG("failed to send packet\n");
-                	goto done;
-        	}
 
 /*	        struct sockaddr_in address;
 		unsigned short port = 30000;
