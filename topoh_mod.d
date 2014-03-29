@@ -34,11 +34,11 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
  ../../tcp_conn.h ../../tcp_init.h ../../tcp_options.h ../../atomic_ops.h \
  ../../atomic/atomic_common.h ../../atomic/atomic_native.h \
  ../../compiler_opt.h ../../events.h ../../parser/msg_parser.h \
- ../../parser/parse_to.h ../../parser/msg_parser.h \
- ../../parser/parse_from.h ../../parser/parse_to.h ../../parser/sdp/sdp.h \
+ ../../parser/parse_content.h ../../parser/msg_parser.h \
+ ../../parser/parse_to.h ../../parser/parse_from.h \
+ ../../parser/parse_to.h ../../parser/sdp/sdp.h \
  ../../parser/sdp/../msg_parser.h ../../parser/sdp/sdp_helpr_funcs.h \
- ../../parser/sdp/../../str.h ../../parser/sdp/sdp.h th_mask.h \
- ../../str.h th_msg.h
+ ../../parser/sdp/../../str.h ../../parser/sdp/sdp.h
 
 ../../sr_module.h:
 
@@ -222,9 +222,11 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
 
 ../../parser/msg_parser.h:
 
-../../parser/parse_to.h:
+../../parser/parse_content.h:
 
 ../../parser/msg_parser.h:
+
+../../parser/parse_to.h:
 
 ../../parser/parse_from.h:
 
@@ -239,9 +241,3 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
 ../../parser/sdp/../../str.h:
 
 ../../parser/sdp/sdp.h:
-
-th_mask.h:
-
-../../str.h:
-
-th_msg.h:

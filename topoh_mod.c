@@ -1,5 +1,36 @@
 /**
- * Ivan Barlog
+ * $Id$
+ *
+ * Copyright (C) 2009 SIP-Router.org
+ *
+ * This file is part of Extensible SIP Router, a free SIP server.
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*!
+ * \file
+ * \brief SIP-router my_topoh :: Module interface
+ * \ingroup my_topoh
+ * Module: \ref my_topoh
+ */
+
+/*! \defgroup topoh SIP-router :: Topology hiding
+ *
+ * This module hides the SIP routing headers that show topology details.
+ * It it is not affected by the server being transaction stateless or
+ * stateful. The script interpreter gets the SIP messages decoded, so all
+ * existing functionality is preserved.
  */
 
 #include <stdio.h>
@@ -19,6 +50,7 @@
 #include "../../ut.h"
 #include "../../forward.h"
 #include "../../parser/msg_parser.h"
+#include "../../parser/parse_content.h"
 #include "../../parser/parse_to.h"
 #include "../../parser/parse_from.h"
 
@@ -34,10 +66,6 @@ int extract_rtcp(str *body, str *rtcp);
 */
 #include "../../parser/sdp/sdp_helpr_funcs.h"
 
-
-#include "th_mask.h"
-#include "th_msg.h"
-
 MODULE_VERSION
 
 /* socket handle */
@@ -51,17 +79,12 @@ int th_msg_sent(void *data);
 static int mod_init(void);
 int init_sockets();
 
-static param_export_t params[]={
-	{0,0,0}
-};
-
-
 /** module exports */
 struct module_exports exports= {
 	"my_topoh",
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	0,
-	params,
+	0, /* params */
 	0,          /* exported statistics */
 	0,          /* exported MI functions */
 	0,          /* exported pseudo-variables */
@@ -148,6 +171,35 @@ int get_msg_type(sip_msg_t *msg)
 	}
 }
 
+/** source: http://www.asipto.com/pub/kamailio-devel-guide/#c06get_msg_body */
+int get_msg_body(struct sip_msg *msg, str *body)
+{
+	/* 'msg' is a pointer to a valid struct sip_msg */
+
+	/* get message body
+	- after that whole SIP MESSAGE is parsed
+	- calls internally parse_headers(msg, HDR_EOH_F, 0)
+	*/
+	body->s = get_body( msg );
+	if (body->s==0)
+	{
+		LM_ERR("cannot extract body from msg\n");
+		return -1;
+	}
+
+	body->len = msg->len - (body->s - msg->buf);
+
+	/* content-length (if present) must be already parsed */
+	if (!msg->content_length)
+	{
+		LM_ERR("no Content-Length header found!\n");
+		return -1;
+	}
+	if(body->len != get_content_length( msg ))
+		LM_WARN("Content length header value different than body size\n");
+	return 0;
+}
+
 /** endpoint structure */
 typedef struct
 {
@@ -178,9 +230,11 @@ int th_msg_received(void *data)
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
+	LM_DBG("\n\n########## MESSAGE\n\n%s\n##########\n\n", obuf->s);
+
 	int msg_type = get_msg_type(&msg);
 
-	LM_DBG("\n\n#####\nMessage type asdf: %d\n\n####", msg_type);
+	LM_DBG("\n\n#####\nMessage type: %d\n\n####", msg_type);
 
 	switch (msg_type)
 	{
@@ -190,13 +244,52 @@ int th_msg_received(void *data)
 
 			if (parse_sdp(&msg) == 0)
 			{
-				str *sdp = (str*) msg.body;
-				LM_DBG("####\n\nSDP:\n\n%s\n\n###\n", sdp->s);
+				LM_DBG("sdp parsed");
+
+				str sdp = {0, 0};
+				unsigned short rtpPort;
+				unsigned short rtcpPort;
+
+				if (get_msg_body(&msg, &sdp) == 0)
+				{
+					LM_DBG("####\n\nASDF PARSED SDP:\n\n%s\n\n###\n", sdp.s);
+
+					str mediamedia;
+					str mediaport;
+					str mediatransport;
+					str mediapayload;
+					int is_rtp;
+					str rtcp;
+
+					if (extract_media_attr(&sdp, &mediamedia, &mediaport, &mediatransport, &mediapayload, &is_rtp) == 0)
+					{
+						//LM_DBG("mediaport: %s\n\n%d\n####\n\n", mediaport.s, mediaport.len);
+
+						char tmp[mediaport.len];
+						memcpy(tmp, mediaport.s, mediaport.len);
+
+						rtpPort = atoi(tmp);
+					}
+
+					if (extract_rtcp(&sdp, &rtcp) == 0)
+					{
+						char tmp[rtcp.len];
+						memcpy(tmp, rtcp.s, rtcp.len);
+
+						rtcpPort = atoi(tmp);
+					}
+					else
+					{
+						rtcpPort = rtpPort + 2;
+					}
+
+					LM_DBG("rtpPort: %d\nrtcpPort: %d\n", rtpPort, rtcpPort);
+
+				}
 			}
 
 
-			break;
-		case 2:
+			break; case 2:
 			//parse RTP/RTCP ports
 			LM_DBG("Message type SIP REPLY");
 			break;
