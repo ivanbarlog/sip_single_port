@@ -260,6 +260,32 @@ int th_msg_received(void *data)
 
                 pkg_free(buf_ptr);
 
+	        struct sockaddr_in address;
+		unsigned short port = 30000;
+
+        	memset((char *) &address, 0, sizeof(address));
+
+	        address.sin_family = AF_INET;
+	        address.sin_addr.s_addr = inet_addr("192.168.11.131");
+        	address.sin_port = htons(port);
+
+
+	        int nonBlocking = 1;
+		if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
+		{
+			LM_DBG("failed to set non-blocking\n");
+			goto done;
+		}
+
+		char * data = "hovno";
+
+		int sent_bytes = sendto(handle, data, strlen(data), 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
+
+		if (sent_bytes != strlen(data))
+        	{
+                	LM_DBG("failed to send packet\n");
+                	goto done;
+        	}
 
 /*	        struct sockaddr_in address;
 		unsigned short port = 30000;
@@ -280,7 +306,7 @@ int th_msg_received(void *data)
 
 		int sent_bytes = sendto(handle, obuf->s, obuf->len, 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
 
-		if (sent_bytes != strlen(data))
+		if (sent_bytes != obuf->len)
         	{
                 	LM_DBG("failed to send packet\n");
                 	goto done;
