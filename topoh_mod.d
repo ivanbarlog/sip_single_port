@@ -35,10 +35,10 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
  ../../atomic/atomic_common.h ../../atomic/atomic_native.h \
  ../../compiler_opt.h ../../events.h ../../parser/msg_parser.h \
  ../../parser/parse_to.h ../../parser/msg_parser.h \
- ../../parser/parse_from.h ../../parser/parse_to.h \
- ../../modules/sanity/api.h \
- ../../modules/sanity/../../parser/msg_parser.h th_mask.h ../../str.h \
- th_msg.h
+ ../../parser/parse_from.h ../../parser/parse_to.h ../../parser/sdp/sdp.h \
+ ../../parser/sdp/../msg_parser.h ../../parser/sdp/sdp_helpr_funcs.h \
+ ../../parser/sdp/../../str.h ../../parser/sdp/sdp.h th_mask.h \
+ ../../str.h th_msg.h
 
 ../../sr_module.h:
 
@@ -230,9 +230,15 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
 
 ../../parser/parse_to.h:
 
-../../modules/sanity/api.h:
+../../parser/sdp/sdp.h:
 
-../../modules/sanity/../../parser/msg_parser.h:
+../../parser/sdp/../msg_parser.h:
+
+../../parser/sdp/sdp_helpr_funcs.h:
+
+../../parser/sdp/../../str.h:
+
+../../parser/sdp/sdp.h:
 
 th_mask.h:
 

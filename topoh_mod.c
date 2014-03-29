@@ -1,36 +1,5 @@
 /**
- * $Id$
- *
- * Copyright (C) 2009 SIP-Router.org
- *
- * This file is part of Extensible SIP Router, a free SIP server.
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*!
- * \file
- * \brief SIP-router topoh :: Module interface
- * \ingroup topoh
- * Module: \ref topoh
- */
-
-/*! \defgroup topoh SIP-router :: Topology hiding
- *
- * This module hides the SIP routing headers that show topology details.
- * It it is not affected by the server being transaction stateless or
- * stateful. The script interpreter gets the SIP messages decoded, so all
- * existing functionality is preserved.
+ * Ivan Barlog
  */
 
 #include <stdio.h>
@@ -53,50 +22,36 @@
 #include "../../parser/parse_to.h"
 #include "../../parser/parse_from.h"
 
-#include "../../modules/sanity/api.h"
+/*
+MSG_BODY_SDP
+application/sdp
+*/
+
+#include "../../parser/sdp/sdp.h"
+/*
+int extract_media_attr(str *body, str *mediamedia, str *mediaport, str *mediatransport, str *mediapayload, int *is_rtp);
+int extract_rtcp(str *body, str *rtcp);
+*/
+#include "../../parser/sdp/sdp_helpr_funcs.h"
+
 
 #include "th_mask.h"
 #include "th_msg.h"
 
 MODULE_VERSION
 
+/* socket handle */
+int handle;
 
-/** module parameters */
-str _th_key = { "aL9.n8~Hm]Z", 0 };
-str th_cookie_name = {"TH", 0};
-str th_cookie_value = {0, 0};
-str th_ip = {"10.1.1.10", 0};
-str th_uparam_name = {"line", 0};
-str th_uparam_prefix = {"sr-", 0};
-str th_vparam_name = {"branch", 0};
-str th_vparam_prefix = {"z9hG4bKsr-", 0};
-
-str th_callid_prefix = {"!!:", 3};
-str th_via_prefix = {0, 0};
-str th_uri_prefix = {0, 0};
-
-int th_param_mask_callid = 0;
-
-int th_sanity_checks = 0;
-sanity_api_t scb;
-
+int get_msg_type(sip_msg_t *msg);
 int th_msg_received(void *data);
 int th_msg_sent(void *data);
-int init_sockets();
 
 /** module functions */
 static int mod_init(void);
+int init_sockets();
 
 static param_export_t params[]={
-	{"mask_key",		STR_PARAM, &_th_key.s},
-	{"mask_ip",		STR_PARAM, &th_ip.s},
-	{"mask_callid",		INT_PARAM, &th_param_mask_callid},
-	{"uparam_name",		STR_PARAM, &th_uparam_name.s},
-	{"uparam_prefix",	STR_PARAM, &th_uparam_prefix.s},
-	{"vparam_name",		STR_PARAM, &th_vparam_name.s},
-	{"vparam_prefix",	STR_PARAM, &th_vparam_prefix.s},
-	{"callid_prefix",	STR_PARAM, &th_callid_prefix.s},
-	{"sanity_checks",	INT_PARAM, &th_sanity_checks},
 	{0,0,0}
 };
 
@@ -126,103 +81,13 @@ static int mod_init(void)
 
 	sr_event_register_cb(SREV_NET_DATA_IN, th_msg_received);
 	sr_event_register_cb(SREV_NET_DATA_OUT, th_msg_sent);
-#ifdef USE_TCP
+
+	#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
-#endif
-	return 0;
-error:
-	return -1;
-}
-
-/**
- *
- */
-int th_prepare_msg(sip_msg_t *msg)
-{
-	if (parse_msg(msg->buf, msg->len, msg)!=0)
-	{
-		LM_DBG("outbuf buffer parsing failed!");
-		return 1;
-	}
-
-	if(msg->first_line.type==SIP_REQUEST)
-	{
-		if(!IS_SIP(msg))
-		{
-			LM_DBG("non sip request message\n");
-			return 1;
-		}
-	} else if(msg->first_line.type!=SIP_REPLY) {
-		LM_DBG("non sip message\n");
-		return 1;
-	}
-
-	if (parse_headers(msg, HDR_EOH_F, 0)==-1)
-	{
-		LM_DBG("parsing headers failed");
-		return 2;
-	}
-
-	if(parse_from_header(msg)<0)
-	{
-		LM_ERR("cannot parse FROM header\n");
-		return 3;
-	}
-
-	if(parse_to_header(msg)<0 || msg->to==NULL)
-	{
-		LM_ERR("cannot parse TO header\n");
-		return 3;
-	}
-
-	if(get_to(msg)==NULL)
-	{
-		LM_ERR("cannot get TO header\n");
-		return 3;
-	}
+	#endif
 
 	return 0;
 }
-
-
-int get_msg_type(sip_msg_t *msg)
-{
-	//find out if packet is SIP request or reply
-	if (msg->first_line.type == SIP_REQUEST && IS_SIP(msg))
-	{
-		return 1;
-	}
-	else if (msg->first_line.type == SIP_REPLY)
-	{
-		return 2;
-	}
-	//if it's not SIP it should be RTP/RTCP
-	else
-	{
-		//second byte from first line 
-		unsigned char byte = msg->first_line[1];
-
-		//we are interested in 6th and 5th bite (reading from right to left counting from index 0)
-		#define BIT6 0x40
-		#define BIT5 0x20
-
-		//if 6th and 5th bit is "10" it's RTCP else RTP
-		if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0)
-		{
-			return 3; //rtcp packet
-		}
-		else
-		{
-			return 4; //rtp packet
-		}
-	}
-
-	//should never happen
-	return -1;
-}
-
-
-int handle;
 
 /*
 * initialize socket communication
@@ -242,6 +107,59 @@ int init_sockets()
 	return 0;
 }
 
+
+int get_msg_type(sip_msg_t *msg)
+{
+	if (parse_msg(msg->buf, msg->len, msg) == 0)
+	{
+		//find out if packet is SIP request or reply
+		if (msg->first_line.type == SIP_REQUEST)
+		{
+			return 1;
+		}
+		else if (msg->first_line.type == SIP_REPLY)
+		{
+			return 2;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+	//if it's not SIP it should be RTP/RTCP
+	else
+	{
+		//second byte from first line 
+		unsigned char byte = msg->buf[1];
+
+		//we are interested in 6th and 5th bite (reading from right to left counting from index 0)
+		#define BIT6 0x40
+		#define BIT5 0x20
+
+		//if 6th and 5th bit is "10" it's RTCP else RTP
+		if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0)
+		{
+			return 3; //rtcp packet
+		}
+		else
+		{
+			return 4; //rtp packet
+		}
+	}
+}
+
+/** endpoint structure */
+typedef struct
+{
+	unsigned short rtp_port;
+	unsigned short rtcp_port;
+	struct sockaddr_in ip_address;
+
+	struct endpoint *next;
+
+} endpoint;
+
+
 /**
  *
  */
@@ -251,40 +169,89 @@ int th_msg_received(void *data)
 	str *obuf;
 	char *nbuf = NULL;
 
+        unsigned short rtp_port = 0;
+        unsigned short rtcp_port = 0;
+
+
 	obuf = (str*)data;
 	memset(&msg, 0, sizeof(sip_msg_t));
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-	        struct sockaddr_in address;
-		unsigned short port = 30000;
+	int msg_type = get_msg_type(&msg);
 
-        	memset((char *) &address, 0, sizeof(address));
+	LM_DBG("\n\n#####\nMessage type asdf: %d\n\n####", msg_type);
 
-	        address.sin_family = AF_INET;
-	        address.sin_addr.s_addr = inet_addr("192.168.11.131");
-        	address.sin_port = htons(port);
+	switch (msg_type)
+	{
+		case 1:
+			//parse RTP/RTCP ports
+			LM_DBG("####\n\nMessage type SIP REQUEST\n\n###");
+
+			if (parse_sdp(&msg) == 0)
+			{
+				str *sdp = (str*) msg.body;
+				LM_DBG("####\n\nSDP:\n\n%s\n\n###\n", sdp->s);
+			}
 
 
-	        int nonBlocking = 1;
-		if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
-		{
-			LM_DBG("failed to set non-blocking\n");
+			break;
+		case 2:
+			//parse RTP/RTCP ports
+			LM_DBG("Message type SIP REPLY");
+			break;
+		case 3: //no break
+		case 4:
+			LM_DBG("Message type RTP/RTCP");
+
+
+		        /*unsigned short local_port = 5060;
+		        struct sockaddr_in remote_address;
+		        struct sockaddr_in local_address;
+
+
+		        memset((char *) &remote_address, 0, sizeof(remote_address));
+		        remote_address.sin_family = AF_INET;
+		        remote_address.sin_addr.s_addr = inet_addr("192.168.11.129");
+		        remote_address.sin_port = htons(remote_port);
+
+
+		        memset((char *) &local_address, 0, sizeof(local_address));
+		        local_address.sin_family = AF_INET;
+		        local_address.sin_addr.s_addr = inet_addr("192.168.11.1");
+		        local_address.sin_port = htons(local_port);
+
+
+		        if (bind(handle, (const struct sockaddr*) &local_address, sizeof(struct sockaddr_in)) < 0)
+		        {
+		                printf("failed to bind socket (%s)\n", strerror(errno));
+		                return 1;
+		        }
+
+		        int nonBlocking = 1;
+		        if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
+		        {
+		                printf("failed to set non-blocking\n");
+		                return 2;
+		        }
+
+		        int sent_bytes = sendto(handle, data, strlen(data), 0, (const struct sockaddr*) &remote_address, sizeof(struct sockaddr_in));
+
+		        if (sent_bytes != strlen(data))
+		        {
+		      		printf("failed to send packet\n");
+		                return 3;
+		        }*/
+
+			break;
+		default:
+			LM_ERR("Unknown message type");
 			goto done;
-		}
-
-		char * data2 = "hovno";
-
-		int sent_bytes = sendto(handle, data2, strlen(data2), 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
-
-		if (sent_bytes != strlen(data2))
-        	{
-                	LM_DBG("failed to send packet\n");
-                	goto done;
-        	}
+	}
 
 
-	if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
+
+	/*if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
 	{
 		LM_DBG("\nPRIJATA SPRAVA JE RTP PACKET\n\n");
 
@@ -307,7 +274,7 @@ int th_msg_received(void *data)
 
                 pkg_free(buf_ptr);
 
-/*	        struct sockaddr_in address;
+	        struct sockaddr_in address;
 		unsigned short port = 30000;
 
         	memset((char *) &address, 0, sizeof(address));
@@ -330,10 +297,10 @@ int th_msg_received(void *data)
         	{
                 	LM_DBG("failed to send packet\n");
                 	goto done;
-        	}*/
+        	}
 
 		// send socket to port 30000
-		/*unsigned short port = 30000;
+		unsigned short port = 30000;
 
 		struct sockaddr_in address;
 		address.sin_family = AF_INET;
@@ -343,12 +310,12 @@ int th_msg_received(void *data)
 		if (send_rtp(obuf, (const struct sockaddr*) &address, port) == 0)
 		{
 			LM_DBG("\nsocket sent successfully\n");
-		}*/
+		}
 	}
 	else
 	{
 		LM_DBG("\nPRIJATA SPRAVA:\n\nLength: %d\n#####\n%s\n#####\n\n", obuf->len, obuf->s);
-	}
+	}*/
 
 done:
 	if (nbuf!=NULL)
@@ -375,7 +342,6 @@ int th_msg_sent(void *data)
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-done:
 	free_sip_msg(&msg);
 	return 0;
 }
