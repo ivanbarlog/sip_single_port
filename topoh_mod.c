@@ -184,8 +184,49 @@ int th_prepare_msg(sip_msg_t *msg)
 	return 0;
 }
 
+
+int get_msg_type(sip_msg_t *msg)
+{
+	//find out if packet is SIP request or reply
+	if (msg->first_line.type == SIP_REQUEST && IS_SIP(msg))
+	{
+		return 1;
+	}
+	else if (msg->first_line.type == SIP_REPLY)
+	{
+		return 2;
+	}
+	//if it's not SIP it should be RTP/RTCP
+	else
+	{
+		//second byte from first line 
+		unsigned char byte = msg->first_line[1];
+
+		//we are interested in 6th and 5th bite (reading from right to left counting from index 0)
+		#define BIT6 0x40
+		#define BIT5 0x20
+
+		//if 6th and 5th bit is "10" it's RTCP else RTP
+		if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0)
+		{
+			return 3; //rtcp packet
+		}
+		else
+		{
+			return 4; //rtp packet
+		}
+	}
+
+	//should never happen
+	return -1;
+}
+
+
 int handle;
 
+/*
+* initialize socket communication
+*/
 int init_sockets()
 {
 	handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -197,28 +238,6 @@ int init_sockets()
 	}
 
 	LM_DBG("sockets successfully initialized");
-
-	return 0;
-}
-
-int send_rtp(str * data, const struct sockaddr * address, unsigned short port)
-{
-	int nonBlocking = 1;
-	if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
-	{
-		LM_ERR("failed to set non-blocking\n");
-		return 2;
-	}
-
-	int sent_bytes = sendto(handle, data->s, data->len, 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
-
-	if (sent_bytes != data->len)
-	{
-		LM_ERR("failed to send packet\n");
-		return 3;
-	}
-
-	LM_DBG("hovno");
 
 	return 0;
 }
