@@ -56,6 +56,7 @@
 #include "../../parser/parse_from.h"
 
 
+#include "../../mem/mem.h"
 #include "../../globals.h"
 
 /*
@@ -81,6 +82,23 @@ MODULE_VERSION
 
 /* socket handle */
 int handle;
+
+/** endpoint structure */
+typedef struct endpoint
+{
+	unsigned short rtp_port;
+	unsigned short rtcp_port;
+	char ip [50];
+
+	/* usable in UDP socket communication */
+	struct sockaddr_in ip_address;
+
+	/* SIP_REQ or SIP_REP */
+	unsigned short type;
+
+	struct endpoint *next;
+
+} endpoint;
 
 int get_msg_type(sip_msg_t *msg);
 int th_msg_received(void *data);
@@ -211,21 +229,6 @@ int get_msg_body(struct sip_msg *msg, str *body)
 	return 0;
 }
 
-/** endpoint structure */
-typedef struct endpoint
-{
-	unsigned short rtp_port;
-	unsigned short rtcp_port;
-	char *ip_address;
-	char ip [50];
-
-	/* SIP_REQ or SIP_REP */
-	unsigned short type;
-
-	struct endpoint *next;
-
-} endpoint;
-
 int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 {
 	if (parse_sdp(msg) == 0)
@@ -319,115 +322,107 @@ void printEndpoint(endpoint *endpoint)
 	);
 }
 
+int printed = 0;
+
+endpoint * request_ep = NULL;
+endpoint * reply_ep = NULL;
+
 /**
  *
  */
 int th_msg_received(void *data)
 {
-	void** d = (void**) data;
-	struct receive_info * ri;
 	sip_msg_t msg;
 	str *obuf;
-	char *nbuf = NULL;
-
-	LM_DBG("d[0]: %s\n", (char *) d[0]);
-	LM_DBG("d[1]: %d\n", (int) d[1]);
-	LM_DBG("d[2]: %s\n", (char *) d[2]);
 
 	obuf = (str*)data;
-	ri = (struct receive_info*) d[2];
-
-	if (ri)
-	{
-		struct ip_addr dst = ri->dst_ip;
-		struct ip_addr src = ri->src_ip;
-		LM_DBG("RECEIVE_INFO FOUND:\n\nAF:\nsrc: %d, dst: %d\nLEN:\nsrc: %d, dst: %d\n", src.af, src.len, dst.af, dst.len);
-
-		LM_DBG("src IP: %d.%d.%d.%d, dst IP: %d.%d.%d.%d",
-			src.u.addr[0],
-			src.u.addr[1],
-			src.u.addr[2],
-			src.u.addr[3],
-			dst.u.addr[0],
-			dst.u.addr[1],
-			dst.u.addr[2],
-			dst.u.addr[3]
-		);
-	}
-	else {LM_DBG("RECEIVE_INFO NOT FOUND");}
 
 	memset(&msg, 0, sizeof(sip_msg_t));
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-	//LM_DBG("socketLists:\n");
-	//print_all_socket_lists();
-
-	/*struct socket_info *current = bind_address;
-	while (current != NULL)
-	{
-		LM_DBG("bind_address: %s, %d\n", current->address_str.s, current->socket);
-		
-		struct addr_info *tmp = current->addr_info_lst;
-		
-		while (tmp != NULL)
-		{
-			LM_DBG("\taddr_info: %s\n", tmp->address_str.s);
-			tmp = tmp->next;
-		}
-		
-		current = current->next;
-	}
-
-	if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
-	{
-		LM_DBG("ASDF RTP MDFK");
-	}
-	else
-	{
-		LM_DBG("\n\n########## MESSAGE\n\n%s\n##########\n\n", obuf->s);
-	}
-
-	return 0;*/
-
 	int msg_type = get_msg_type(&msg);
-
-	LM_DBG("\n\n#####\nMessage type: %d\n\n####", msg_type);
 
 	switch (msg_type)
 	{
-		case SIP_REQ: //no break
-		case SIP_REP:
+		case SIP_REQ:
+			if (request_ep == NULL)
 			{
-				//parse RTP/RTCP ports, and IP
-				endpoint ep;
+				LM_DBG("writing endpoint %d", msg_type);
 
-				if (parseEndpoint(&msg, &ep) == 0)
+				request_ep = (endpoint *)pkg_malloc(sizeof(endpoint));
+
+				if (parseEndpoint(&msg, request_ep) == 0)
 				{
-					ep.type = msg_type;
-					printEndpoint(&ep);
+					request_ep->type = msg_type;
+
+				        memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
+				        request_ep->ip_address.sin_family = AF_INET;
+				        request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
+		        		request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
+
+					printEndpoint(request_ep);
 				}
 				else
 				{
-					LM_DBG("failed to parse endpoint");
+					LM_DBG("reset request_ep");
+					pkg_free(request_ep);
+					request_ep = NULL;
 				}
-
-				break;
 			}
+			else
+			{
+				LM_DBG("not writing endpoint %d", msg_type);
+			}
+			break;
+
+		case SIP_REP:
+			if (reply_ep == NULL)
+			{
+				LM_DBG("writing endpoint %d", msg_type);
+
+				reply_ep = (endpoint *)pkg_malloc(sizeof(endpoint));
+
+				if (parseEndpoint(&msg, reply_ep) == 0)
+				{
+					reply_ep->type = msg_type;
+
+				        memset((char *) &(reply_ep->ip_address), 0, sizeof(reply_ep->ip_address));
+				        reply_ep->ip_address.sin_family = AF_INET;
+				        reply_ep->ip_address.sin_addr.s_addr = inet_addr(reply_ep->ip);
+		        		reply_ep->ip_address.sin_port = htons(reply_ep->rtp_port);
+
+					printEndpoint(reply_ep);
+				}
+				else
+				{
+					LM_DBG("reset reply_ep");
+					pkg_free(reply_ep);
+					reply_ep = NULL;
+				}
+			}
+			else
+			{
+				LM_DBG("not writing endpoint %d", msg_type);
+			}
+			break;
+
 		case 3: //no break
 		case 4:
 			LM_DBG("Message type RTP/RTCP %d", msg_type);
-
+			
+			if (printed == 0)
+			{
+				printEndpoint(request_ep);
+				printEndpoint(reply_ep);
+				printed = 1;
+			}
 
 		        /*unsigned short local_port = 5060;
 		        struct sockaddr_in remote_address;
 		        struct sockaddr_in local_address;
 
 
-		        memset((char *) &remote_address, 0, sizeof(remote_address));
-		        remote_address.sin_family = AF_INET;
-		        remote_address.sin_addr.s_addr = inet_addr("192.168.11.129");
-		        remote_address.sin_port = htons(remote_port);
 
 
 		        memset((char *) &local_address, 0, sizeof(local_address));
@@ -447,15 +442,19 @@ int th_msg_received(void *data)
 		        {
 		                printf("failed to set non-blocking\n");
 		                return 2;
-		        }
+		        }*/
 
-		        int sent_bytes = sendto(handle, data, strlen(data), 0, (const struct sockaddr*) &remote_address, sizeof(struct sockaddr_in));
+		        int sent_bytes = sendto(bind_address->socket, data, strlen(data), 0, (const struct sockaddr*) &(request_ep->ip_address), sizeof(struct sockaddr_in));
 
 		        if (sent_bytes != strlen(data))
 		        {
-		      		printf("failed to send packet\n");
-		                return 3;
-		        }*/
+		      		LM_DBG("failed to send packet\n");
+		                goto done;
+		        }
+		        else
+		        {
+		        	LM_DBG("packet sent successfully");
+		        }
 
 			break;
 		default:
@@ -463,79 +462,7 @@ int th_msg_received(void *data)
 			goto done;
 	}
 
-
-
-	/*if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
-	{
-		LM_DBG("\nPRIJATA SPRAVA JE RTP PACKET\n\n");
-
-		int i;
-		// 2 for hex char + 1 for ':'; last char don't have ':' and this last bit is for '\n'
-                char* buf_str = (char*) malloc((3 * sizeof(unsigned char)) * obuf->len);
-                char* buf_ptr = buf_str;
-                for (i = 0; i < obuf->len; i++)
-                {
-                        buf_ptr += sprintf(buf_ptr, "%02X", (unsigned char) obuf->s[i]);
-			if (i < obuf->len - 1)
-			{
-				buf_ptr += sprintf(buf_ptr, ":");
-			}
-                }
-                sprintf(buf_ptr,"\n");
-                *(buf_ptr + 1) = '\0';
-
-                LM_DBG("\nHEX:\n#####\n%s\n#####\n\n", buf_str);
-
-                pkg_free(buf_ptr);
-
-	        struct sockaddr_in address;
-		unsigned short port = 30000;
-
-        	memset((char *) &address, 0, sizeof(address));
-
-	        address.sin_family = AF_INET;
-	        address.sin_addr.s_addr = inet_addr("192.168.11.130");
-        	address.sin_port = htons(port);
-
-
-	        int nonBlocking = 1;
-		if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
-		{
-			LM_DBG("failed to set non-blocking\n");
-			goto done;
-		}
-
-		int sent_bytes = sendto(handle, obuf->s, obuf->len, 0, (const struct sockaddr*) &address, sizeof(struct sockaddr_in));
-
-		if (sent_bytes != obuf->len)
-        	{
-                	LM_DBG("failed to send packet\n");
-                	goto done;
-        	}
-
-		// send socket to port 30000
-		unsigned short port = 30000;
-
-		struct sockaddr_in address;
-		address.sin_family = AF_INET;
-		address.sin_addr.s_addr = inet_addr("192.168.11.30");
-		address.sin_port = htons(port);
-
-		if (send_rtp(obuf, (const struct sockaddr*) &address, port) == 0)
-		{
-			LM_DBG("\nsocket sent successfully\n");
-		}
-	}
-	else
-	{
-		LM_DBG("\nPRIJATA SPRAVA:\n\nLength: %d\n#####\n%s\n#####\n\n", obuf->len, obuf->s);
-	}*/
-
 done:
-	if (nbuf!=NULL)
-	{
-		pkg_free(nbuf);
-	}
 	free_sip_msg(&msg);
 
 	return 0;
