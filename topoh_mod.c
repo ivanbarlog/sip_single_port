@@ -55,6 +55,9 @@
 #include "../../parser/parse_to.h"
 #include "../../parser/parse_from.h"
 
+
+#include "../../globals.h"
+
 /*
 MSG_BODY_SDP
 application/sdp
@@ -108,7 +111,7 @@ struct module_exports exports= {
  */
 static int mod_init(void)
 {
-	//init_sockets();
+	init_sockets();
 
 	sr_event_register_cb(SREV_NET_DATA_IN, th_msg_received);
 	sr_event_register_cb(SREV_NET_DATA_OUT, th_msg_sent);
@@ -160,7 +163,7 @@ int get_msg_type(sip_msg_t *msg)
 	//if it's not SIP it should be RTP/RTCP
 	else
 	{
-		//second byte from first line 
+		//second byte from first line
 		unsigned char byte = msg->buf[1];
 
 		//we are interested in 6th and 5th bite (reading from right to left counting from index 0)
@@ -236,9 +239,6 @@ int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 			str mediapayload;
 			int is_rtp;
 
-//			LM_DBG("sdp: %s", sdp.s);
-
-
 			if (extract_media_attr(&sdp, &mediamedia, &mediaport, &mediatransport, &mediapayload, &is_rtp) == 0)
 			{
 				char tmp[mediaport.len];
@@ -267,8 +267,6 @@ int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 				endpoint->rtcp_port = endpoint->rtp_port + 2;
 			}
 
-			LM_DBG("sdp: %s", sdp.s);
-
 			unsigned int a, b, c, d;
 			char *creator;
 
@@ -278,7 +276,6 @@ int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 
 			char ip [50];
 
-			LM_DBG("before sprintf");
 			int len = sprintf(ip, "%d.%d.%d.%d", a, b, c, d);
 
 			if (len > 0)
@@ -291,30 +288,6 @@ int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 
 				return -1;
 			}
-
-			//ip = endpoint->ip_address;
-
-			//endpoint->ip_address = ip;
-			//LM_DBG("after sprintf %s, %s", ip, endpoint->ip_address);
-
-
-			/*str mediaip;
-			int pf;
-			char line;
-
-			if (extract_mediaip(&sdp, &mediaip, &pf, &line) == 1)
-			{
-				char tmp[mediaip.len];
-				memcpy(tmp, mediaip.s, mediaip.len);
-
-				endpoint->ip_address = tmp;
-			}
-			else
-			{
-				LM_DBG("MEDIA EXTRACT FAILED");
-				return -1;
-			}*/
-
 
 			return 0;
 		}
@@ -351,17 +324,71 @@ void printEndpoint(endpoint *endpoint)
  */
 int th_msg_received(void *data)
 {
+	void** d = (void**) data;
+	struct receive_info * ri;
 	sip_msg_t msg;
 	str *obuf;
 	char *nbuf = NULL;
 
+	LM_DBG("d[0]: %s\n", (char *) d[0]);
+	LM_DBG("d[1]: %d\n", (int) d[1]);
+	LM_DBG("d[2]: %s\n", (char *) d[2]);
+
 	obuf = (str*)data;
+	ri = (struct receive_info*) d[2];
+
+	if (ri)
+	{
+		struct ip_addr dst = ri->dst_ip;
+		struct ip_addr src = ri->src_ip;
+		LM_DBG("RECEIVE_INFO FOUND:\n\nAF:\nsrc: %d, dst: %d\nLEN:\nsrc: %d, dst: %d\n", src.af, src.len, dst.af, dst.len);
+
+		LM_DBG("src IP: %d.%d.%d.%d, dst IP: %d.%d.%d.%d",
+			src.u.addr[0],
+			src.u.addr[1],
+			src.u.addr[2],
+			src.u.addr[3],
+			dst.u.addr[0],
+			dst.u.addr[1],
+			dst.u.addr[2],
+			dst.u.addr[3]
+		);
+	}
+	else {LM_DBG("RECEIVE_INFO NOT FOUND");}
+
 	memset(&msg, 0, sizeof(sip_msg_t));
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-	LM_DBG("\n\n########## MESSAGE\n\n%s\n##########\n\n", obuf->s);
-	return 0;
+	//LM_DBG("socketLists:\n");
+	//print_all_socket_lists();
+
+	/*struct socket_info *current = bind_address;
+	while (current != NULL)
+	{
+		LM_DBG("bind_address: %s, %d\n", current->address_str.s, current->socket);
+		
+		struct addr_info *tmp = current->addr_info_lst;
+		
+		while (tmp != NULL)
+		{
+			LM_DBG("\taddr_info: %s\n", tmp->address_str.s);
+			tmp = tmp->next;
+		}
+		
+		current = current->next;
+	}
+
+	if ((unsigned char) obuf->s[0] == (unsigned char) 0x80)
+	{
+		LM_DBG("ASDF RTP MDFK");
+	}
+	else
+	{
+		LM_DBG("\n\n########## MESSAGE\n\n%s\n##########\n\n", obuf->s);
+	}
+
+	return 0;*/
 
 	int msg_type = get_msg_type(&msg);
 
@@ -372,13 +399,11 @@ int th_msg_received(void *data)
 		case SIP_REQ: //no break
 		case SIP_REP:
 			{
-				//parse RTP/RTCP ports
+				//parse RTP/RTCP ports, and IP
 				endpoint ep;
 
 				if (parseEndpoint(&msg, &ep) == 0)
 				{
-//					LM_DBG("\n\n#####\n\nRTP: %d\nRTCP: %d\n\n#####\n\n", ep.rtp_port, ep.rtcp_port);
-
 					ep.type = msg_type;
 					printEndpoint(&ep);
 				}
@@ -391,7 +416,7 @@ int th_msg_received(void *data)
 			}
 		case 3: //no break
 		case 4:
-			LM_DBG("Message type RTP/RTCP");
+			LM_DBG("Message type RTP/RTCP %d", msg_type);
 
 
 		        /*unsigned short local_port = 5060;

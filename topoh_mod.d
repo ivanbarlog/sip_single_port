@@ -36,7 +36,7 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
  ../../compiler_opt.h ../../events.h ../../parser/msg_parser.h \
  ../../parser/parse_content.h ../../parser/msg_parser.h \
  ../../parser/parse_to.h ../../parser/parse_from.h \
- ../../parser/parse_to.h ../../parser/sdp/sdp.h \
+ ../../parser/parse_to.h ../../globals.h ../../parser/sdp/sdp.h \
  ../../parser/sdp/../msg_parser.h ../../parser/sdp/sdp_helpr_funcs.h \
  ../../parser/sdp/../../str.h ../../parser/sdp/sdp.h
 
@@ -231,6 +231,8 @@ topoh_mod.o: topoh_mod.c ../../sr_module.h ../../parser/msg_parser.h \
 ../../parser/parse_from.h:
 
 ../../parser/parse_to.h:
+
+../../globals.h:
 
 ../../parser/sdp/sdp.h:
 
