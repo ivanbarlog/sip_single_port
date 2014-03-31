@@ -131,7 +131,8 @@ static int mod_init(void)
 {
 	init_sockets();
 
-	sr_event_register_cb(SREV_NET_DATA_IN, th_msg_received);
+	sr_event_register_cb(SREV_NET_DGRAM_IN, th_msg_received);
+	//sr_event_register_cb(SREV_NET_DATA_IN, th_msg_received);
 	sr_event_register_cb(SREV_NET_DATA_OUT, th_msg_sent);
 
 	#ifdef USE_TCP
@@ -332,10 +333,27 @@ endpoint * reply_ep = NULL;
  */
 int th_msg_received(void *data)
 {
+	void **d = (void **)data;
+	void * d1 = d[0];
+	void * d2 = d[1];
+
+	char * s = (char *)d1;
+	int len = *(int*)d2;
+
+	/* if message is smaller
+	 * than 10 B we can 
+	 * skip it
+	 */
+	if (len < 10) return 0;
+
 	sip_msg_t msg;
 	str *obuf;
 
-	obuf = (str*)data;
+	obuf = (str *)pkg_malloc(sizeof(str));
+
+	obuf->s = s;
+	obuf->len = len;
+
 
 	memset(&msg, 0, sizeof(sip_msg_t));
 	msg.buf = obuf->s;
@@ -410,7 +428,65 @@ int th_msg_received(void *data)
 		case 3: //no break
 		case 4:
 			LM_DBG("Message type RTP/RTCP %d", msg_type);
-			
+
+			struct receive_info * ri;
+			char src_ip[50];
+			struct sockaddr_in dst_ip;
+
+		        ri = (struct receive_info*) d[2];
+
+			if (ri != NULL)
+			{
+				int len = sprintf(src_ip, "%d.%d.%d.%d",
+					ri->src_ip.u.addr[0],
+					ri->src_ip.u.addr[1],
+					ri->src_ip.u.addr[2],
+					ri->src_ip.u.addr[3]
+				);
+				
+				/**
+				 * compare src_ip with request and reply endpoint
+				 * to know where to send RTP packet
+				 */
+
+				LM_DBG("\n\nsrc_ip: %s\nrequest_ip: %s\nreply_ip: %s\n\n", src_ip, request_ep->ip, reply_ep->ip);
+
+				if (strcmp(src_ip, request_ep->ip))
+				{
+					LM_DBG("sending to request");
+					dst_ip = request_ep->ip_address;
+				}
+				else if (strcmp(src_ip, reply_ep->ip))
+				{
+					LM_DBG("sending to reply");
+					dst_ip = reply_ep->ip_address;
+				}
+				else
+				{
+					LM_DBG("do not know where to send packet\n");
+					goto done;
+				}
+				
+			        int sent_bytes = sendto(bind_address->socket, obuf->s, obuf->len, 0, (const struct sockaddr*) &dst_ip, sizeof(struct sockaddr_in));
+
+			        if (sent_bytes != obuf->len)
+			        {
+			      		LM_DBG("failed to send packet");
+			      		goto done;
+			      	}
+				else
+				{
+		       			LM_DBG("packet sent successfully");
+				}
+
+			}
+			else
+			{
+				LM_DBG("receive info is null\n");
+				goto done;
+			}
+
+
 			if (printed == 0)
 			{
 				printEndpoint(request_ep);
@@ -418,43 +494,7 @@ int th_msg_received(void *data)
 				printed = 1;
 			}
 
-		        /*unsigned short local_port = 5060;
-		        struct sockaddr_in remote_address;
-		        struct sockaddr_in local_address;
 
-
-
-
-		        memset((char *) &local_address, 0, sizeof(local_address));
-		        local_address.sin_family = AF_INET;
-		        local_address.sin_addr.s_addr = inet_addr("192.168.11.1");
-		        local_address.sin_port = htons(local_port);
-
-
-		        if (bind(handle, (const struct sockaddr*) &local_address, sizeof(struct sockaddr_in)) < 0)
-		        {
-		                printf("failed to bind socket (%s)\n", strerror(errno));
-		                return 1;
-		        }
-
-		        int nonBlocking = 1;
-		        if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
-		        {
-		                printf("failed to set non-blocking\n");
-		                return 2;
-		        }*/
-
-		        int sent_bytes = sendto(bind_address->socket, data, strlen(data), 0, (const struct sockaddr*) &(request_ep->ip_address), sizeof(struct sockaddr_in));
-
-		        if (sent_bytes != strlen(data))
-		        {
-		      		LM_DBG("failed to send packet\n");
-		                goto done;
-		        }
-		        else
-		        {
-		        	LM_DBG("packet sent successfully");
-		        }
 
 			break;
 		default:
