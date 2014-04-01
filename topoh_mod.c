@@ -80,9 +80,6 @@ MODULE_VERSION
 #define RTCP 4
 
 
-/* socket handle */
-int handle;
-
 /** endpoint structure */
 typedef struct endpoint
 {
@@ -101,12 +98,10 @@ typedef struct endpoint
 } endpoint;
 
 int get_msg_type(sip_msg_t *msg);
-int th_msg_received(void *data);
-int th_msg_sent(void *data);
+int msg_received(void *data);
 
 /** module functions */
 static int mod_init(void);
-int init_sockets();
 
 /** module exports */
 struct module_exports exports= {
@@ -129,11 +124,7 @@ struct module_exports exports= {
  */
 static int mod_init(void)
 {
-	init_sockets();
-
-	sr_event_register_cb(SREV_NET_DGRAM_IN, th_msg_received);
-	//sr_event_register_cb(SREV_NET_DATA_IN, th_msg_received);
-	sr_event_register_cb(SREV_NET_DATA_OUT, th_msg_sent);
+	sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
 
 	#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
@@ -141,25 +132,6 @@ static int mod_init(void)
 
 	return 0;
 }
-
-/*
-* initialize socket communication
-*/
-int init_sockets()
-{
-	handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-	if (handle <= 0)
-	{
-		LM_ERR("failed to create socket\n");
-		return 1;
-	}
-
-	LM_DBG("sockets successfully initialized");
-
-	return 0;
-}
-
 
 int get_msg_type(sip_msg_t *msg)
 {
@@ -331,7 +303,7 @@ endpoint * reply_ep = NULL;
 /**
  *
  */
-int th_msg_received(void *data)
+int msg_received(void *data)
 {
 	void **d = (void **)data;
 	void * d1 = d[0];
@@ -339,12 +311,6 @@ int th_msg_received(void *data)
 
 	char * s = (char *)d1;
 	int len = *(int*)d2;
-
-	/* if message is smaller
-	 * than 10 B we can 
-	 * skip it
-	 */
-	if (len < 10) return 0;
 
 	sip_msg_t msg;
 	str *obuf;
@@ -425,8 +391,8 @@ int th_msg_received(void *data)
 			}
 			break;
 
-		case 3: //no break
-		case 4:
+		case RTP: //no break
+		case RTCP:
 			LM_DBG("Message type RTP/RTCP %d", msg_type);
 
 			struct receive_info * ri;
@@ -486,15 +452,12 @@ int th_msg_received(void *data)
 				goto done;
 			}
 
-
 			if (printed == 0)
 			{
 				printEndpoint(request_ep);
 				printEndpoint(reply_ep);
 				printed = 1;
 			}
-
-
 
 			break;
 		default:
@@ -508,22 +471,4 @@ done:
 	return 0;
 }
 
-/**
- *
- */
-int th_msg_sent(void *data)
-{
-	LM_DBG("in th_msg_sent");
-
-	sip_msg_t msg;
-	str *obuf;
-
-	obuf = (str*)data;
-	memset(&msg, 0, sizeof(sip_msg_t));
-	msg.buf = obuf->s;
-	msg.len = obuf->len;
-
-	free_sip_msg(&msg);
-	return 0;
-}
 
