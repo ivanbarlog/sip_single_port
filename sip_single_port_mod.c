@@ -20,9 +20,9 @@
 
 /*!
  * \file
- * \brief SIP-router my_topoh :: Module interface
- * \ingroup my_topoh
- * Module: \ref my_topoh
+ * \brief SIP-router sip_single_port :: Module interface
+ * \ingroup sip_single_port
+ * Module: \ref sip_single_port
  */
 
 /*! \defgroup topoh SIP-router :: Topology hiding
@@ -58,6 +58,9 @@
 
 #include "../../mem/mem.h"
 #include "../../globals.h"
+
+#include "../textops/txt_var.h"
+
 
 /*
 MSG_BODY_SDP
@@ -105,7 +108,7 @@ static int mod_init(void);
 
 /** module exports */
 struct module_exports exports= {
-	"my_topoh",
+	"sip_single_port",
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	0,
 	0, /* params */
