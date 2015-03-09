@@ -25,7 +25,7 @@
  * Module: \ref sip_single_port
  */
 
-/*! \defgroup topoh SIP-router :: Topology hiding
+/*! \defgroup sip_single_port SIP-router :: Topology hiding
  *
  * This module hides the SIP routing headers that show topology details.
  * It it is not affected by the server being transaction stateless or
@@ -54,19 +54,18 @@
 #include "../../parser/parse_content.h"
 #include "../../parser/parse_to.h"
 #include "../../parser/parse_from.h"
+#include "../../parser/parse_methods.h"
 
 
 #include "../../mem/mem.h"
 #include "../../globals.h"
 
-#include "../textops/txt_var.h"
-
+#include "../../re.h"
 
 /*
 MSG_BODY_SDP
 application/sdp
 */
-
 #include "../../parser/sdp/sdp.h"
 /*
 int extract_media_attr(str *body, str *mediamedia, str *mediaport, str *mediatransport, str *mediapayload, int *is_rtp);
@@ -75,7 +74,6 @@ int extract_rtcp(str *body, str *rtcp);
 #include "../../parser/sdp/sdp_helpr_funcs.h"
 
 MODULE_VERSION
-
 
 #define SIP_REQ 1
 #define SIP_REP 2
@@ -102,16 +100,29 @@ typedef struct endpoint
 
 int get_msg_type(sip_msg_t *msg);
 int msg_received(void *data);
+int msg_sent(void *data);
+int skip_media_changes(sip_msg_t *msg);
+int changeRtpAndRtcpPort(struct sip_msg *msg);
 
 /** module functions */
 static int mod_init(void);
+
+/** module parameters */
+str _host_uri = {0, 0};
+str _host_port = str_init("5060");
+
+static param_export_t params[]={
+		{"host_uri",	PARAM_STR,	&_host_uri},
+		{"host_port",	PARAM_STR,	&_host_port},
+		{0,0,0}
+};
 
 /** module exports */
 struct module_exports exports= {
 	"sip_single_port",
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	0,
-	0, /* params */
+	params, /* params */
 	0,          /* exported statistics */
 	0,          /* exported MI functions */
 	0,          /* exported pseudo-variables */
@@ -128,6 +139,8 @@ struct module_exports exports= {
 static int mod_init(void)
 {
 	sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
+//	sr_event_register_cb(SREV_NET_DATA_IN, tdb_msg_received);
+	sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
 	#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
@@ -343,10 +356,10 @@ int msg_received(void *data)
 				{
 					request_ep->type = msg_type;
 
-				        memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
-				        request_ep->ip_address.sin_family = AF_INET;
-				        request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
-		        		request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
+					memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
+					request_ep->ip_address.sin_family = AF_INET;
+					request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
+					request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
 
 					printEndpoint(request_ep);
 				}
@@ -402,9 +415,9 @@ int msg_received(void *data)
 			char src_ip[50];
 			struct sockaddr_in dst_ip;
 
-		        ri = (struct receive_info*) d[2];
+            ri = (struct receive_info*) d[2];
 
-			if (ri != NULL)
+			if (ri != NULL && request_ep != NULL && reply_ep != NULL)
 			{
 				int len = sprintf(src_ip, "%d.%d.%d.%d",
 					ri->src_ip.u.addr[0],
@@ -417,7 +430,6 @@ int msg_received(void *data)
 				 * compare src_ip with request and reply endpoint
 				 * to know where to send RTP packet
 				 */
-
 				LM_DBG("\n\nsrc_ip: %s\nrequest_ip: %s\nreply_ip: %s\n\n", src_ip, request_ep->ip, reply_ep->ip);
 
 				if (strcmp(src_ip, request_ep->ip))
@@ -436,16 +448,16 @@ int msg_received(void *data)
 					goto done;
 				}
 				
-			        int sent_bytes = sendto(bind_address->socket, obuf->s, obuf->len, 0, (const struct sockaddr*) &dst_ip, sizeof(struct sockaddr_in));
+				int sent_bytes = sendto(bind_address->socket, obuf->s, obuf->len, 0, (const struct sockaddr*) &dst_ip, sizeof(struct sockaddr_in));
 
-			        if (sent_bytes != obuf->len)
-			        {
-			      		LM_DBG("failed to send packet");
-			      		goto done;
-			      	}
+				if (sent_bytes != obuf->len)
+				{
+					LM_DBG("failed to send packet");
+					goto done;
+				}
 				else
 				{
-		       			LM_DBG("packet sent successfully");
+					LM_DBG("packet sent successfully");
 				}
 
 			}
@@ -474,4 +486,119 @@ done:
 	return 0;
 }
 
+int msg_sent(void *data) {
+	sip_msg_t msg;
+	str *obuf;
+	int direction;
+	int dialog;
+	int local;
 
+	obuf = (str*)data;
+	memset(&msg, 0, sizeof(sip_msg_t));
+	msg.buf = obuf->s;
+	msg.len = obuf->len;
+
+
+    // todo:
+    // if INVITE changeRtpAndRtcpPort
+    // if ~200 changeRtpAndRtcpPort
+
+	if (skip_media_changes(&msg) < 0) {
+		goto done;
+	}
+
+	changeRtpAndRtcpPort(&msg);
+
+done:
+	free_sip_msg(&msg);
+
+	return 0;
+}
+
+int changeRtpAndRtcpPort(struct sip_msg *msg)
+{
+    if (parse_sdp(msg) == 0) {
+
+
+		str body = {0, 0};
+		if (get_msg_body(msg, &body) == 0)
+		{
+			struct subst_expr* se;
+			se=(struct subst_expr*)"m=audio 5060";
+
+			str* result;
+			result = subst_str("m=audio [0-9]+", msg, se, 0);
+
+			LM_DBG("\n\n\nRESULT: %s\n\n\n", result);
+
+//			'/^m=audio [0-9]+/m=audio 5060/g'
+
+			sdp_info_t* sdp;
+			sdp = (sdp_info_t*)pkg_malloc(sizeof(sdp_info_t));
+			sdp->raw_sdp = body;
+			sdp->type = MSG_BODY_SDP;
+			sdp->free = (free_msg_body_f)free_sdp;
+			msg->body = (msg_body_t*)sdp;
+		}
+
+
+			/*str mediamedia;
+            str mediaport;
+            str mediatransport;
+            str mediapayload;
+            int is_rtp;
+
+            if (extract_media_attr(msg->body, &mediamedia, &mediaport, &mediatransport, &mediapayload, &is_rtp) == 0) {
+                mediaport.s = _host_port.s;
+                mediaport.len = _host_port.len;
+            }
+            else {
+                LM_ERR("Cannot parse RTP port.");
+                return -1;
+            }
+
+            str rtcp;
+
+            if (extract_rtcp(&sdp, &rtcp) == 0) {
+                rtcp.s = _host_port.s;
+                rtcp.len = _host_port.len;
+            }*/
+
+		return 0;
+	}
+    else
+    {
+        LM_ERR("Cannot parse SDP.");
+        return -1;
+    }
+}
+
+int fixSupportedCodecs(struct sip_msg *msg)
+{
+    //todo
+    return 0;
+}
+
+int skip_media_changes(sip_msg_t *msg)
+{
+	if (parse_msg(msg->buf, msg->len, msg) == 0) {
+
+		if (msg->first_line.type == SIP_REQUEST)
+		{
+			int method = msg->REQ_METHOD;
+
+			if (method == 1) {
+				return 1;
+			}
+		}
+		else if (msg->first_line.type == SIP_REPLY)
+		{
+			unsigned int code = msg->REPLY_STATUS;
+			if (code >= 200 && code < 300) {
+				return 1;
+			}
+		}
+	}
+
+	return -1;
+}
