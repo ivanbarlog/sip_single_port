@@ -25,12 +25,14 @@
  * Module: \ref sip_single_port
  */
 
-/*! \defgroup sip_single_port SIP-router :: Topology hiding
+/*! \defgroup sip_single_port SIP-router :: SIP Single Port
  *
- * This module hides the SIP routing headers that show topology details.
- * It it is not affected by the server being transaction stateless or
- * stateful. The script interpreter gets the SIP messages decoded, so all
- * existing functionality is preserved.
+ * This module was created as a diploma thesis at Slovak University
+ * of Technology in Bratislava Faculty of Informatics and Information
+ * Technology. Module is dedicated to prove concept of SIP Single Port
+ * architecture in which not only SIP traffic is routed via SIP server
+ * eg. Kamailio but also all data streams (RTP and RTCP) so the stream
+ * is more manageable since it is flowing over same TCP port.
  */
 
 #define _GNU_SOURCE
@@ -39,49 +41,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <bits/stdio2.h>
 
 #include "../../sr_module.h"
 #include "../../events.h"
 #include "../../dprint.h"
 #include "../../tcp_options.h"
-#include "../../ut.h"
 #include "../../forward.h"
-#include "../../parser/msg_parser.h"
-#include "../../parser/parse_content.h"
-#include "../../parser/parse_to.h"
-#include "../../parser/parse_from.h"
-#include "../../parser/parse_methods.h"
-
-
 #include "../../mem/mem.h"
 #include "../../globals.h"
 
-#include "../../re.h"
-
-/*
-MSG_BODY_SDP
-application/sdp
-*/
-#include "../../parser/sdp/sdp.h"
-/*
-int extract_media_attr(str *body, str *mediamedia, str *mediaport, str *mediatransport, str *mediapayload, int *is_rtp);
-int extract_rtcp(str *body, str *rtcp);
-*/
-#include "../../parser/sdp/sdp_helpr_funcs.h"
-#include "../cdp_avp/avp_add.h"
-#include "../cdp_avp/avp_new.h"
-#include "../../msg_translator.h"
-#include "../../data_lump.h"
-
-
 #include "ssp_funcs.h"
 #include "ssp_endpoint.h"
+#include "ssp_body.h"
 
 MODULE_VERSION
 
