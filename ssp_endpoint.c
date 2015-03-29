@@ -1,22 +1,5 @@
 #include "ssp_endpoint.h"
 
-/** endpoint structure */
-typedef struct endpoint
-{
-    unsigned short rtp_port;
-    unsigned short rtcp_port;
-    char ip [50];
-
-    /* usable in UDP socket communication */
-    struct sockaddr_in ip_address;
-
-    /* SIP_REQ or SIP_REP */
-    unsigned short type;
-
-    struct endpoint *next;
-
-} endpoint;
-
 int parseEndpoint(struct sip_msg *msg, endpoint *endpoint)
 {
     if (parse_sdp(msg) == 0)

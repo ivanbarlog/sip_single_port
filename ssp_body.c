@@ -82,7 +82,7 @@ int skip_media_changes(sip_msg_t *msg)
     return -1;
 }
 
-int changeRtpAndRtcpPort(struct sip_msg *msg) {
+int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 
     LM_DBG("\n\n\nbefore parsing sdp\n\n\n");
 
@@ -102,7 +102,7 @@ int changeRtpAndRtcpPort(struct sip_msg *msg) {
 //			seRtcp->replacement = _host_port;
 
     char *pattern;
-    asprintf(&pattern, "/m=audio ([0-9]{0,5})/m=audio %s/", (char *) _host_port.s);
+    asprintf(&pattern, "/m=audio ([0-9]{0,5})/m=audio %s/", (char *) host_port.s);
     LM_DBG("Pattern for replacement: %s\n", pattern);
 
     str *subst;

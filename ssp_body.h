@@ -1,6 +1,7 @@
 #ifndef _KAMAILIO_SSP_BODY_H_
 #define _KAMAILIO_SSP_BODY_H_
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include "../../mem/mem.h"
 #include "../../re.h"
@@ -29,7 +30,6 @@ int get_msg_type(sip_msg_t *msg);
 
 int skip_media_changes(sip_msg_t *msg);
 
-
-int changeRtpAndRtcpPort(struct sip_msg *msg);
+int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri);
 
 #endif //_KAMAILIO_SSP_BODY_H_

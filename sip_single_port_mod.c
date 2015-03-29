@@ -35,7 +35,6 @@
  * is more manageable since it is flowing over same TCP port.
  */
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -102,6 +101,11 @@ static int mod_init(void)
 
 	return 0;
 }
+
+int printed = 0;
+
+endpoint * request_ep = NULL;
+endpoint * reply_ep = NULL;
 
 /**
  *
@@ -292,7 +296,7 @@ int msg_sent(void *data) {
 		goto done;
 	}
 
-	if (changeRtpAndRtcpPort(&msg) == 1) {
+	if (changeRtpAndRtcpPort(&msg, _host_port, _host_uri) == 1) {
 		obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
 	}
 
