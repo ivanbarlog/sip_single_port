@@ -14,6 +14,7 @@
 #include "../../data_lump.h"
 #include "../../ut.h"
 #include "../../config.h"
+#include "../../parser/parse_fline.h"
 
 #include "ssp_funcs.h"
 
@@ -22,13 +23,21 @@
 #define RTP 3
 #define RTCP 4
 
+typedef struct replaced
+{
+    str text;
+    struct replaced *next;
+
+} replaced;
+
+
 int fixSupportedCodecs(struct sip_msg *msg);
 
-char* update_msg(sip_msg_t *msg, unsigned int *olen);
+char* update_msg(struct sip_msg *msg, unsigned int *olen);
 
-int get_msg_type(sip_msg_t *msg);
+int get_msg_type(struct sip_msg *msg);
 
-int skip_media_changes(sip_msg_t *msg);
+int skip_media_changes(struct sip_msg *msg);
 
 int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri);
 

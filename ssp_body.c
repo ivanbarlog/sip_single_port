@@ -6,7 +6,7 @@ int fixSupportedCodecs(struct sip_msg *msg)
     return 0;
 }
 
-char* update_msg(sip_msg_t *msg, unsigned int *olen)
+char* update_msg(struct sip_msg *msg, unsigned int *olen)
 {
     struct dest_info dst;
 
@@ -14,11 +14,16 @@ char* update_msg(sip_msg_t *msg, unsigned int *olen)
 
     init_dest_info(&dst);
     dst.proto = PROTO_UDP;
-    return build_req_buf_from_sip_req(msg,
+
+//    if (msg->first_line.type == SIP_REPLY) {
+//        return generate_res_buf_from_sip_res(msg, olen, BUILD_NO_VIA1_UPDATE);
+//    } else {
+        return build_req_buf_from_sip_req(msg,
             olen, &dst, BUILD_NO_LOCAL_VIA|BUILD_NO_VIA1_UPDATE);
+//    }
 }
 
-int get_msg_type(sip_msg_t *msg)
+int get_msg_type(struct sip_msg *msg)
 {
     if (parse_msg(msg->buf, msg->len, msg) == 0)
     {
@@ -58,7 +63,7 @@ int get_msg_type(sip_msg_t *msg)
     }
 }
 
-int skip_media_changes(sip_msg_t *msg)
+int skip_media_changes(struct sip_msg *msg)
 {
     if (parse_msg(msg->buf, msg->len, msg) == 0) {
 
@@ -82,6 +87,170 @@ int skip_media_changes(sip_msg_t *msg)
     return -1;
 }
 
+static int ssp_set_body(struct sip_msg* msg, str *nb)
+{
+    struct lump *anchor;
+    char* buf;
+    int len;
+    char* value_s;
+    int value_len;
+    str body = {0,0};
+
+    body.len = 0;
+    body.s = get_body(msg);
+    if (body.s==0)
+    {
+        LM_ERR("malformed sip message\n");
+        return -1;
+    }
+
+    del_nonshm_lump( &(msg->body_lumps) );
+    msg->body_lumps = NULL;
+
+    if (msg->content_length)
+    {
+        body.len = get_content_length( msg );
+        if(body.len > 0)
+        {
+            if(body.s+body.len>msg->buf+msg->len)
+            {
+                LM_ERR("invalid content length: %d\n", body.len);
+                return -1;
+            }
+            if(del_lump(msg, body.s - msg->buf, body.len, 0) == 0)
+            {
+                LM_ERR("cannot delete existing body");
+                return -1;
+            }
+        }
+    }
+
+    anchor = anchor_lump(msg, msg->unparsed - msg->buf, 0, 0);
+
+    if (anchor == 0)
+    {
+        LM_ERR("failed to get anchor\n");
+        return -1;
+    }
+
+    if (msg->content_length==0)
+    {
+        /* need to add Content-Length */
+        len = nb->len;
+        value_s=int2str(len, &value_len);
+        LM_DBG("content-length: %d (%s)\n", value_len, value_s);
+
+        len=CONTENT_LENGTH_LEN+value_len+CRLF_LEN;
+        buf=pkg_malloc(sizeof(char)*(len));
+
+        if (buf==0)
+        {
+            LM_ERR("out of pkg memory\n");
+            return -1;
+        }
+
+        memcpy(buf, CONTENT_LENGTH, CONTENT_LENGTH_LEN);
+        memcpy(buf+CONTENT_LENGTH_LEN, value_s, value_len);
+        memcpy(buf+CONTENT_LENGTH_LEN+value_len, CRLF, CRLF_LEN);
+        if (insert_new_lump_after(anchor, buf, len, 0) == 0)
+        {
+            LM_ERR("failed to insert content-length lump\n");
+            pkg_free(buf);
+            return -1;
+        }
+    }
+
+    anchor = anchor_lump(msg, body.s - msg->buf, 0, 0);
+
+    if (anchor == 0)
+    {
+        LM_ERR("failed to get body anchor\n");
+        return -1;
+    }
+
+    buf=pkg_malloc(sizeof(char)*(nb->len));
+    if (buf==0)
+    {
+        LM_ERR("out of pkg memory\n");
+        return -1;
+    }
+    memcpy(buf, nb->s, nb->len);
+    if (insert_new_lump_after(anchor, buf, nb->len, 0) == 0)
+    {
+        LM_ERR("failed to insert body lump\n");
+        pkg_free(buf);
+        return -1;
+    }
+    LM_DBG("new body: [%.*s]", nb->len, nb->s);
+    return 1;
+}
+
+/* returns the substitution result in a str, input must be 0 term
+ *  0 on no match or malloc error
+ *  if count is non zero it will be set to the number of matches, or -1
+ *   if error
+ */
+str* ssp_subst_str(const char *input, struct sip_msg* msg, struct subst_expr* se, int* count)
+{
+    str* res;
+    struct replace_lst *lst;
+    struct replace_lst* l;
+    int len;
+    int size;
+    const char* p;
+    char* dest;
+    const char* end;
+
+
+    /* compute the len */
+    len=strlen(input);
+    end=input+len;
+    lst=subst_run(se, input, msg, count);
+    if (lst==0){
+                LM_DBG("no match\n");
+        return 0;
+    }
+    for (l=lst; l; l=l->next)
+        len+=(int)(l->rpl.len)-l->size;
+    res=pkg_malloc(sizeof(str));
+    if (res==0){
+                LM_ERR("mem. allocation error\n");
+        goto error;
+    }
+    res->s=pkg_malloc(len+1); /* space for null termination */
+    if (res->s==0){
+                LM_ERR("mem. allocation error (res->s)\n");
+        goto error;
+    }
+    res->s[len]=0;
+    res->len=len;
+
+    /* replace */
+    dest=res->s;
+    p=input;
+    for(l=lst; l; l=l->next){
+        size=l->offset+input-p;
+        memcpy(dest, p, size); /* copy till offset */
+        p+=size + l->size; /* skip l->size bytes */
+        dest+=size;
+        if (l->rpl.len){
+            memcpy(dest, l->rpl.s, l->rpl.len);
+            dest+=l->rpl.len;
+        }
+    }
+    memcpy(dest, p, end-p);
+    if(lst) replace_lst_free(lst);
+    return res;
+    error:
+    if (lst) replace_lst_free(lst);
+    if (res){
+        if (res->s) pkg_free(res->s);
+        pkg_free(res);
+    }
+    if (count) *count=-1;
+    return 0;
+}
+
 int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 
     LM_DBG("\n\n\nbefore parsing sdp\n\n\n");
@@ -102,7 +271,8 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 //			seRtcp->replacement = _host_port;
 
     char *pattern;
-    asprintf(&pattern, "/m=audio ([0-9]{0,5})/m=audio %s/", (char *) host_port.s);
+    asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{0,5})/\\1%s/", (char *) host_port.s);
+//    asprintf(&pattern, "/m=audio ([0-9]{0,5})/m=audio %s/", (char *) host_port.s);
     LM_DBG("Pattern for replacement: %s\n", pattern);
 
     str *subst;
@@ -112,96 +282,35 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 
     seMedia = subst_parser(subst);
 
-    LM_DBG("Pattern for replacement (from *subst_expr): %s\n", seMedia->replacement.s);
+    LM_DBG("Pattern for replacement (from *subst_expr): %s, %d\n", seMedia->replacement.s, seMedia->replacement.len);
 
     int count = 0;
     str *tmpBody;
     char const *oldBody = (char const *) sdp.s;
 
-    tmpBody = subst_str(oldBody, msg, seMedia, &count);
+    /*
+     * list of replaced values
+     */
+    struct replaced *lst;
+
+    lst = pkg_malloc(sizeof(struct replaced));
+    if (lst==0){
+        LM_ERR("out of mem\n");
+        goto error;
+    }
+    memset(lst, 0, sizeof(struct replaced));
+
+    tmpBody = ssp_subst_str(oldBody, msg, seMedia, &count);
 
     LM_DBG("Found %d matches for %s\nin body:\n%s\n", count, pattern, oldBody);
 
     if (count > 0) {
-        struct lump *anchor;
-        char* buf;
-        char* value_s;
-        int value_len;
-
-        del_nonshm_lump( &(msg->body_lumps) );
-        msg->body_lumps = NULL;
-
-        if (del_lump(msg, sdp.s - msg->buf, sdp.len, 0) == 0)
-        {
-            LM_ERR("cannot delete existing body");
-            return -1;
-        }
-
-        anchor = anchor_lump(msg, msg->unparsed - msg->buf, 0, 0);
-
-        if (anchor == 0)
-        {
-            LM_ERR("failed to get anchor\n");
-            return -1;
-        }
-
-        if (msg->content_length==0)
-        {
-            /* need to add Content-Length */
-            int len = tmpBody->len;
-            value_s=int2str(len, &value_len);
-
-            len=CONTENT_LENGTH_LEN+value_len+CRLF_LEN;
-            buf=pkg_malloc(sizeof(char)*(len));
-
-            if (buf==0)
-            {
-                LM_ERR("out of pkg memory\n");
-                return -1;
-            }
-
-            memcpy(buf, CONTENT_LENGTH, CONTENT_LENGTH_LEN);
-            memcpy(buf+CONTENT_LENGTH_LEN, value_s, value_len);
-            memcpy(buf+CONTENT_LENGTH_LEN+value_len, CRLF, CRLF_LEN);
-            if (insert_new_lump_after(anchor, buf, len, 0) == 0)
-            {
-                LM_ERR("failed to insert content-length lump\n");
-                pkg_free(buf);
-                return -1;
-            }
-        }
-
-        anchor = anchor_lump(msg, sdp.s - msg->buf, 0, 0);
-        if (anchor == 0)
-        {
-            LM_ERR("failed to get body anchor\n");
-            return -1;
-        }
-
-        buf=pkg_malloc(sizeof(char)*(tmpBody->len));
-        if (buf==0)
-        {
-            LM_ERR("out of pkg memory\n");
-            return -1;
-        }
-        memcpy(buf, tmpBody->s, tmpBody->len);
-        if (insert_new_lump_after(anchor, buf, tmpBody->len, 0) == 0)
-        {
-            LM_ERR("failed to insert body lump\n");
-            pkg_free(buf);
-            pkg_free(tmpBody);
-            return -1;
-        }
-        LM_DBG("new body: [%.*s]", tmpBody->len, tmpBody->s);
-
-        msg->body_lumps = anchor;
-
-        LM_DBG("MSG NEW BUF\n%s\n", msg->buf);
+        ssp_set_body(msg, tmpBody);
 
         return 1;
     }
 
-    error:
+error:
     LM_ERR("Cannot change SDP.\n");
     return -1;
 }

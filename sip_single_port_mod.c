@@ -43,11 +43,7 @@
 
 #include "../../sr_module.h"
 #include "../../events.h"
-#include "../../dprint.h"
-#include "../../tcp_options.h"
 #include "../../forward.h"
-#include "../../mem/mem.h"
-#include "../../globals.h"
 
 #include "ssp_funcs.h"
 #include "ssp_endpoint.h"
@@ -296,7 +292,10 @@ int msg_sent(void *data) {
 		goto done;
 	}
 
+	LM_DBG("before changing RTP: \n\n%d\n%s\n", msg.len, msg.buf);
 	if (changeRtpAndRtcpPort(&msg, _host_port, _host_uri) == 1) {
+		LM_DBG("changedRTP: \n\n%d\n%s\n", msg.len, msg.buf);
+
 		obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
 	}
 
