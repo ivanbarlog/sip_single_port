@@ -265,15 +265,11 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 
 
     struct subst_expr
-            *seMedia;
-
-//			seRtcp = (struct subst_expr *)"a=rtcp:([0-9]{0,5})";
-//			seRtcp->replacement = _host_port;
+            *seMedia,
+            *seRtcp;
 
     char *pattern;
     asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{0,5})/\\1%s/", (char *) host_port.s);
-//    asprintf(&pattern, "/m=audio ([0-9]{0,5})/m=audio %s/", (char *) host_port.s);
-    LM_DBG("Pattern for replacement: %s\n", pattern);
 
     str *subst;
     subst = (str *) pkg_malloc(sizeof(str));
@@ -282,30 +278,40 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 
     seMedia = subst_parser(subst);
 
-    LM_DBG("Pattern for replacement (from *subst_expr): %s, %d\n", seMedia->replacement.s, seMedia->replacement.len);
+    asprintf(&pattern, "/(a=rtcp: *)([0-9]{0,5})/\\1%s/", (char *) host_port.s);
+
+    subst->s = pattern;
+    subst->len = strlen(pattern);
+    seRtcp = subst_parser(subst);
+
+//    LM_DBG("Pattern for replacement (from *subst_expr): %s, %d\n", seMedia->replacement.s, seMedia->replacement.len);
 
     int count = 0;
-    str *tmpBody;
+    str *newBody, *tmpBody;
     char const *oldBody = (char const *) sdp.s;
 
-    /*
-     * list of replaced values
-     */
-    struct replaced *lst;
-
-    lst = pkg_malloc(sizeof(struct replaced));
-    if (lst==0){
-        LM_ERR("out of mem\n");
-        goto error;
-    }
-    memset(lst, 0, sizeof(struct replaced));
-
-    tmpBody = ssp_subst_str(oldBody, msg, seMedia, &count);
+    newBody = ssp_subst_str(oldBody, msg, seMedia, &count);
 
     LM_DBG("Found %d matches for %s\nin body:\n%s\n", count, pattern, oldBody);
 
     if (count > 0) {
-        ssp_set_body(msg, tmpBody);
+        count = 0;
+        tmpBody = ssp_subst_str(newBody, msg, seRtcp, &count);
+
+        if (count > 0) {
+            newBody->s = tmpBody->s;
+            newBody->len = tmpBody->len;
+        } else {
+            /* todo: if RTCP is not present
+             * we need to add it and set it to 5060
+             * because if it is not present it is automatically
+             * determined to next odd port which is 5061
+             *
+             * also we need to mark this somewhere in endpoint structure
+             */
+        }
+
+        ssp_set_body(msg, newBody);
 
         return 1;
     }
