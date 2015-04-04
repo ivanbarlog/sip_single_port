@@ -17,6 +17,8 @@
 /** endpoint structure */
 typedef struct endpoint
 {
+    replacedPort *rtp_ports;
+
     unsigned short rtp_port;
     unsigned short rtcp_port;
     char ip [50];

@@ -190,7 +190,13 @@ static int ssp_set_body(struct sip_msg* msg, str *nb)
  *  if count is non zero it will be set to the number of matches, or -1
  *   if error
  */
-str* ssp_subst_str(const char *input, struct sip_msg* msg, struct subst_expr* se, int* count)
+str* ssp_subst_str(
+        const char *input,
+        struct sip_msg* msg,
+        struct subst_expr* se,
+        int* count,
+        struct replacedPort *ports
+)
 {
     str* res;
     struct replace_lst *lst;
@@ -207,7 +213,7 @@ str* ssp_subst_str(const char *input, struct sip_msg* msg, struct subst_expr* se
     end=input+len;
     lst=subst_run(se, input, msg, count);
     if (lst==0){
-                LM_DBG("no match\n");
+        LM_DBG("no match\n");
         return 0;
     }
     for (l=lst; l; l=l->next)
@@ -225,17 +231,60 @@ str* ssp_subst_str(const char *input, struct sip_msg* msg, struct subst_expr* se
     res->s[len]=0;
     res->len=len;
 
+
+    /*
+     * dest - finalny text
+     * p - kopia inputu
+     * input - povodny text
+     */
+
+    int assigned = 0;
+
     /* replace */
     dest=res->s;
     p=input;
-    for(l=lst; l; l=l->next){
-        size=l->offset+input-p;
+    for(l=lst; l; l=l->next) {
+        struct replacedPort *current;
+        current = pkg_malloc(sizeof(struct replacedPort));
+//        current->text.s = pkg_malloc(sizeof(char) * l->size);
+
+        char * str;
+        memcpy(str, input + l->offset, l->size + 1);
+        str[l->size] = '\0';
+
+//        memcpy(current->text.s, input + l->offset, l->size);
+//        current->text.s[l->size] = 0;
+//        current->text.len = strlen(current->text.s);
+//        current->offset = l->offset;
+        int result = 0;
+        result = sscanf(str, "%*s%hu", &(current->port));
+
+        if (result < 0) {
+            sscanf(str, "a=rtcp:%hu", &(current->port));
+        }
+
+        LM_DBG("PORT NUMBER: %d in string: %s\n\n", current->port, str);
+
+//        &(current->port)
+
+        if (assigned == 0) {
+            LM_DBG("GGG assigned = %d\n", assigned);
+            ports = current;
+            assigned = 1;
+        } else {
+            LM_DBG("GGG assigned = %d\n", assigned);
+            ports->next = current;
+        }
+
+//        LM_DBG("HHH\n\nl->offset: %d, l->size: %d\n", l->offset, l->size);
+
+        size = l->offset + input - p;
         memcpy(dest, p, size); /* copy till offset */
-        p+=size + l->size; /* skip l->size bytes */
-        dest+=size;
-        if (l->rpl.len){
+        p += size + l->size; /* skip l->size bytes */
+        dest += size;
+        if (l->rpl.len) {
             memcpy(dest, l->rpl.s, l->rpl.len);
-            dest+=l->rpl.len;
+            dest += l->rpl.len;
         }
     }
     memcpy(dest, p, end-p);
@@ -289,14 +338,18 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
     int count = 0;
     str *newBody, *tmpBody;
     char const *oldBody = (char const *) sdp.s;
+    struct replacedPort *rtp_ports, *rtcp_port;
+    rtp_ports = pkg_malloc(sizeof(struct replacedPort));
+    rtcp_port = pkg_malloc(sizeof(struct replacedPort));
 
-    newBody = ssp_subst_str(oldBody, msg, seMedia, &count);
+    newBody = ssp_subst_str(oldBody, msg, seMedia, &count, rtp_ports);
 
-    LM_DBG("Found %d matches for %s\nin body:\n%s\n", count, pattern, oldBody);
+    LM_DBG("Found %d matches for %s\nin body:\n%s\n", count, seMedia->replacement.s, oldBody);
 
     if (count > 0) {
         count = 0;
-        tmpBody = ssp_subst_str(newBody, msg, seRtcp, &count);
+        oldBody = (char const *) newBody->s;
+        tmpBody = ssp_subst_str(oldBody, msg, seRtcp, &count, rtcp_port);
 
         if (count > 0) {
             newBody->s = tmpBody->s;
@@ -310,6 +363,16 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
              * also we need to mark this somewhere in endpoint structure
              */
         }
+
+//        int ctr = 0;
+//        struct replacedPort *i;
+//        for(i = rtp_ports; i; i=i->next) {
+//            if (i->port == NULL) {
+//                break;
+//            }
+//            LM_DBG("%d.: %d\n", ctr, i->port);
+//            ctr++;
+//        }
 
         ssp_set_body(msg, newBody);
 

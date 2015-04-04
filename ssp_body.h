@@ -23,12 +23,17 @@
 #define RTP 3
 #define RTCP 4
 
-typedef struct replaced
-{
-    str text;
-    struct replaced *next;
+typedef enum {MEDIA_ATTRIBUTE, RTCP_ATTRIBUTE} replacedType;
 
-} replaced;
+typedef struct replacedPort
+{
+    unsigned short port;
+    str text;
+    int offset;
+    replacedType type;
+    struct replacedPort *next;
+
+} replacedPort;
 
 
 int fixSupportedCodecs(struct sip_msg *msg);
