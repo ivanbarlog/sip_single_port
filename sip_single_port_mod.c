@@ -98,11 +98,6 @@ static int mod_init(void) {
 	return 0;
 }
 
-//int printed = 0;
-
-//endpoint_t * request_ep = NULL;
-//endpoint_t * reply_ep = NULL;
-
 /**
  *
  */
@@ -131,95 +126,69 @@ int msg_received(void *data)
 	int msg_type = get_msg_type(&msg);
 
 	endpoint_t *endpoint;
+	connection_t *connection = NULL;
+
+	char * call_id;
 
 	switch (msg_type)
 	{
 		case SIP_REQ: // no break
+			if (msg.callid == NULL) {
+				LM_DBG("cannot parse message call id");
+				goto done;
+			}
+
+			memcpy(&call_id, msg.callid->body.s, msg.callid->body.len);
+
+			if (findConnection(call_id, connection) == -1) {
+				connection = createConnection(call_id);
+			}
+
+			if (connection->request_endpoint != NULL) {
+				endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
+
+				if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
+					connection->request_endpoint = endpoint;
+					printEndpoint(endpoint);
+				}
+			}
+
+			break;
+
+		case SIP_REP:
+			if (msg.callid == NULL) {
+				LM_DBG("cannot parse message call id");
+				goto done;
+			}
+
+			memcpy(&call_id, msg.callid->body.s, msg.callid->body.len);
+
+			if (findConnection(call_id, connection) == -1) {
+				connection = createConnection(call_id);
+			}
+
+			if (connection->response_endpoint != NULL) {
+				endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
+
+				if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
+					connection->response_endpoint = endpoint;
+					printEndpoint(endpoint);
+				}
+			}
 
 //			endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
 //
 //			if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
-//				if (endpointExists(head, endpoint->ip, endpoint->type) == 1) {
+//				if (endpointExists(endpoint->ip, endpoint->type) == 1) {
 //					LM_ERR("Endpoint already exists.");
 //					goto done;
 //				}
 //
-//				pushEndpoint(head, endpoint);
+//				pushEndpoint(endpoint);
+//
+//				printEndpoint(endpoint);
 //			}
 
-//			if (request_ep == NULL)
-//			{
-//				LM_DBG("writing endpoint %d\n", msg_type);
-//
-//				request_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
-//
-//				if (parseEndpoint(&msg, request_ep, msg_type) == 0)
-//				{
-//					request_ep->type = msg_type;
-//
-//					memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
-//					request_ep->ip_address.sin_family = AF_INET;
-//					request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
-//					request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
-//
-//					printEndpoint(request_ep);
-//				}
-//				else
-//				{
-//					LM_DBG("reset request_ep\n");
-//					pkg_free(request_ep);
-//					request_ep = NULL;
-//				}
-//			}
-//			else
-//			{
-//				LM_DBG("not writing endpoint %d\n", msg_type);
-//			}
-//			break;
-
-		case SIP_REP:
-			endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
-
-			if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
-				if (endpointExists(endpoint->ip, endpoint->type) == 1) {
-					LM_ERR("Endpoint already exists.");
-					goto done;
-				}
-
-				pushEndpoint(endpoint);
-
-				printEndpoint(endpoint);
-			}
-
-
-//			if (reply_ep == NULL)
-//			{
-//				LM_DBG("writing endpoint %d\n", msg_type);
-//
-//				reply_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
-//
-//				if (parseEndpoint(&msg, reply_ep, msg_type) == 0)
-//				{
-//					reply_ep->type = msg_type;
-//
-//				        memset((char *) &(reply_ep->ip_address), 0, sizeof(reply_ep->ip_address));
-//				        reply_ep->ip_address.sin_family = AF_INET;
-//				        reply_ep->ip_address.sin_addr.s_addr = inet_addr(reply_ep->ip);
-//		        		reply_ep->ip_address.sin_port = htons(reply_ep->rtp_port);
-//
-//					printEndpoint(reply_ep);
-//				}
-//				else
-//				{
-//					LM_DBG("reset reply_ep\n");
-//					pkg_free(reply_ep);
-//					reply_ep = NULL;
-//				}
-//			}
-//			else
-//			{
-//				LM_DBG("not writing endpoint %d\n", msg_type);
-//			}
 			break;
 
 		case RTP: //no break
@@ -243,6 +212,11 @@ int msg_received(void *data)
 					"AAA:\nsrc_ip: %s\nsrc_port: %d\ndst_port: %d\n",
 					src_ip, ri->src_port, ri->dst_port
 			);
+
+			if (findConnectionBySrcIp(src_ip, connection) == 1) {
+				LM_DBG("found connection %s\n", connection->call_id);
+			}
+
 
 //			endpoint_t *endpoint;
 //

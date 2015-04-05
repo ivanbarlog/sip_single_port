@@ -5,6 +5,86 @@
  */
 static endpoint_t * head = NULL;
 
+/**
+ * Head of connections list
+ */
+static connection_t * connections = NULL;
+
+int initConnectionList()
+{
+    if (connections != NULL) {
+        return 1;
+    }
+
+    connections = pkg_malloc(sizeof(connection_t));
+    if (connections == 0) {
+        LM_ERR("out of memory");
+        return 1;
+    }
+    connections->prev = NULL;
+    connections->next = NULL;
+
+    return 0;
+}
+
+int findConnection(const char *call_id, connection_t *connection)
+{
+    initConnectionList();
+
+    connection_t *c;
+
+    for (c = connections; c; c = c->next) {
+        if (strcmp(c->call_id, call_id) == 0) {
+            connection = c;
+            return 1;
+        }
+    }
+
+    connection = NULL;
+
+    return -1;
+}
+
+int findConnectionBySrcIp(const char *src_ip, connection_t *connection)
+{
+    initConnectionList();
+
+    connection_t *c;
+    c = connections;
+
+    if (c->request_endpoint == NULL || c->response_endpoint == NULL) {
+        LM_ERR("Both request and response endpoint must be defined\n");
+        return -1;
+    }
+
+    while (c->next != NULL) {
+        if (strcmp(c->request_endpoint->ip, src_ip) == 1 || strcmp(c->response_endpoint->ip, src_ip) == 1) {
+            connection = c;
+            return 1;
+        }
+        c = c->next;
+    }
+
+    connection = NULL;
+
+    return -1;
+}
+
+connection_t * createConnection(const char *call_id)
+{
+    connection_t *connection;
+    connection = pkg_malloc(sizeof(connection_t));
+
+    strcpy(connection->call_id, call_id);
+
+    connection->next = NULL;
+    connection->prev = NULL;
+    connection->request_endpoint = NULL;
+    connection->response_endpoint = NULL;
+
+    return connection;
+}
+
 struct sockaddr_in* getStreamAddress(endpoint_t *endpoint, const char *streamType)
 {
     struct sockaddr_in *ip_address;
@@ -161,7 +241,7 @@ void printEndpointStreams(endpoint_stream_t *head)
     }
 }
 
-int initList()
+int initEndpointList()
 {
     if (head != NULL) {
         LM_DBG("list is already initialized.\n");
@@ -182,7 +262,7 @@ int initList()
 
 void pushEndpoint(endpoint_t *endpoint)
 {
-    initList();
+    initEndpointList();
 
     endpoint_t *current;
     current = head;
@@ -197,7 +277,7 @@ void pushEndpoint(endpoint_t *endpoint)
 
 int findEndpoint(const char * ip, endpoint_t *endpoint)
 {
-    initList();
+    initEndpointList();
 
     endpoint_t *current;
     current = head;
@@ -216,7 +296,7 @@ int findEndpoint(const char * ip, endpoint_t *endpoint)
 
 int removeEndpoint(const char *ip)
 {
-    initList();
+    initEndpointList();
 
     endpoint_t *endpoint = NULL;
     if (findEndpoint(ip, endpoint) != 0) {
@@ -226,7 +306,6 @@ int removeEndpoint(const char *ip)
 
     if (endpoint->prev == NULL && endpoint->next == NULL) {
         head = NULL;
-        initList(head);
     } else {
         // endpoint must point to head since it has no previous endpoint
         if (endpoint->prev == NULL) {
@@ -251,7 +330,7 @@ int removeEndpoint(const char *ip)
  */
 int endpointExists(const char *ip, int type)
 {
-    initList();
+    initEndpointList();
 
     endpoint_t *current;
     current = head;

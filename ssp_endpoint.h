@@ -52,11 +52,23 @@ typedef struct endpoint
 
 } endpoint_t;
 
+typedef struct connection
+{
+    char call_id[100];
+
+    endpoint_t *request_endpoint;
+    endpoint_t *response_endpoint;
+
+    struct connection *prev;
+    struct connection *next;
+
+} connection_t;
+
 int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type);
 
 void printEndpoint(endpoint_t *endpoint);
 
-int initList();
+int initEndpointList();
 
 void pushEndpoint(endpoint_t *endpoint);
 
@@ -73,5 +85,16 @@ void printEndpointStreams(endpoint_stream_t *head);
 struct sockaddr_in* getStreamAddress(endpoint_t *endpoint, const char *streamType);
 
 int findStream(endpoint_stream_t *head, endpoint_stream_t *stream, unsigned short port);
+
+/**
+ * connection methods
+ */
+int initConnectionList();
+
+int findConnection(const char *call_id, connection_t *connection);
+
+int findConnectionBySrcIp(const char *src_ip, connection_t *connection);
+
+connection_t * createConnection(const char *call_id);
 
 #endif //_KAMAILIO_SSP_ENDPOINT_H_
