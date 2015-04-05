@@ -56,15 +56,15 @@ int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type);
 
 void printEndpoint(endpoint_t *endpoint);
 
-int initList(endpoint_t *head);
+int initList();
 
-void pushEndpoint(endpoint_t *head, endpoint_t *endpoint);
+void pushEndpoint(endpoint_t *endpoint);
 
-int findEndpoint(endpoint_t *head, const char * ip, endpoint_t *endpoint);
+int findEndpoint(const char * ip, endpoint_t *endpoint);
 
-int removeEndpoint(endpoint_t *head, const char *ip);
+int removeEndpoint(const char *ip);
 
-int endpointExists(endpoint_t *head, const char *ip, int type);
+int endpointExists(const char *ip, int type);
 
 int keyCmp(const char *key, const char *value);
 

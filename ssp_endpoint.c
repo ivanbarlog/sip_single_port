@@ -1,5 +1,10 @@
 #include "ssp_endpoint.h"
 
+/**
+ * Head of endpoint list
+ */
+static endpoint_t * head = NULL;
+
 struct sockaddr_in* getStreamAddress(endpoint_t *endpoint, const char *streamType)
 {
     struct sockaddr_in *ip_address;
@@ -73,8 +78,15 @@ int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type)
 
             endpoint->streams = head;
 
-            endpoint->call_id->s = msg->callid->body.s;
-            endpoint->call_id->len = msg->callid->body.len;
+//            memcpy(&(endpoint->call_id.s), msg->callid->body.s, msg->callid->body.len + 1);
+//            endpoint->call_id.s[msg->callid->body.len] = '\0';
+//            endpoint->call_id->len = msg->callid->body.len + 1;
+
+//            endpoint->call_id->s = msg->callid->body.s;
+//            endpoint->call_id->len = msg->callid->body.len;
+
+            endpoint->call_id = pkg_malloc(sizeof(str));
+            *(endpoint->call_id) = msg->callid->body;
 
             str rtcp;
 
@@ -149,7 +161,7 @@ void printEndpointStreams(endpoint_stream_t *head)
     }
 }
 
-int initList(endpoint_t *head)
+int initList()
 {
     if (head != NULL) {
         LM_DBG("list is already initialized.\n");
@@ -164,12 +176,16 @@ int initList(endpoint_t *head)
     head->prev = NULL;
     head->next = NULL;
 
+    LM_DBG("List of endpoints initialized successfully - %p.", head);
     return 0;
 }
 
-void pushEndpoint(endpoint_t *head, endpoint_t *endpoint)
+void pushEndpoint(endpoint_t *endpoint)
 {
+    initList();
+
     endpoint_t *current;
+    current = head;
     while (current->next != NULL) {
         current = current->next;
     }
@@ -179,8 +195,10 @@ void pushEndpoint(endpoint_t *head, endpoint_t *endpoint)
     current->next->prev = current;
 }
 
-int findEndpoint(endpoint_t *head, const char * ip, endpoint_t *endpoint)
+int findEndpoint(const char * ip, endpoint_t *endpoint)
 {
+    initList();
+
     endpoint_t *current;
     current = head;
     endpoint = NULL;
@@ -196,10 +214,12 @@ int findEndpoint(endpoint_t *head, const char * ip, endpoint_t *endpoint)
     return -1;
 }
 
-int removeEndpoint(endpoint_t *head, const char *ip)
+int removeEndpoint(const char *ip)
 {
+    initList();
+
     endpoint_t *endpoint = NULL;
-    if (findEndpoint(head, ip, endpoint) != 0) {
+    if (findEndpoint(ip, endpoint) != 0) {
         LM_DBG("cannot find endpoint with IP '%s'\n", ip);
         return -1;
     }
@@ -229,9 +249,12 @@ int removeEndpoint(endpoint_t *head, const char *ip)
  * Checks if endpoint is already in list
  * returns 1 if endpoint exists otherwise -1
  */
-int endpointExists(endpoint_t *head, const char *ip, int type)
+int endpointExists(const char *ip, int type)
 {
-    endpoint_t *current = head;
+    initList();
+
+    endpoint_t *current;
+    current = head;
     while (current->next != NULL) {
         if (keyCmp(ip, current->ip) == 0 && current->type == type) {
             return 1;

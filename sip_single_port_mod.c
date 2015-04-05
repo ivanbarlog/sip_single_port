@@ -56,11 +56,6 @@ static int mod_init(void);
 int msg_received(void *data);
 int msg_sent(void *data);
 
-/**
- * Head of endpoint list
- */
-endpoint_t * head = NULL;
-
 /** module parameters */
 str _host_uri = {0, 0};
 str _host_port = str_init("5060");
@@ -91,8 +86,6 @@ struct module_exports exports = {
  * init module function
  */
 static int mod_init(void) {
-
-	initList(head);
 
 	sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
 //	sr_event_register_cb(SREV_NET_DATA_IN, tdb_msg_received);
@@ -188,12 +181,12 @@ int msg_received(void *data)
 			endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
 
 			if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
-				if (endpointExists(head, endpoint->ip, endpoint->type) == 1) {
+				if (endpointExists(endpoint->ip, endpoint->type) == 1) {
 					LM_ERR("Endpoint already exists.");
 					goto done;
 				}
 
-				pushEndpoint(head, endpoint);
+				pushEndpoint(endpoint);
 
 				printEndpoint(endpoint);
 			}
