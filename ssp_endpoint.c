@@ -1,43 +1,89 @@
 #include "ssp_endpoint.h"
 
-int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint)
+struct sockaddr_in* getStreamAddress(endpoint_t *endpoint, const char *streamType)
 {
+    struct sockaddr_in *ip_address;
+
+    unsigned short rtp_port;
+    endpoint_stream_t *c;
+
+    int found = -1;
+    for (c = endpoint->streams; c; c = c->next) {
+        if (strcmp(c->media.s, streamType) == 0) {
+            rtp_port = atoi(c->port.s);
+            found = 1;
+            break;
+        }
+    }
+
+    if (found == -1) {
+        LM_ERR("Cannot find '%s' stream in endpoint structure.\n", streamType);
+        return NULL;
+    }
+
+    ip_address = pkg_malloc(sizeof(struct sockaddr_in));
+
+    memset((char *) &ip_address, 0, sizeof(struct sockaddr_in));
+    ip_address->sin_family = AF_INET;
+    ip_address->sin_addr.s_addr = inet_addr(endpoint->ip);
+    ip_address->sin_port = htons(rtp_port);
+
+    return ip_address;
+}
+
+/**
+ * Parses
+ * - all RTP streams from SDP,
+ * - RTCP port (if not present it is determined) and
+ * - creator IP address,
+ *
+ * All parsed values are persisted in endpoint parameter
+ */
+int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type)
+{
+    endpoint->type = msg_type;
+
     if (parse_sdp(msg) == 0)
     {
         str sdp = {0, 0};
         if (get_msg_body(msg, &sdp) == 0)
         {
-            str mediamedia;
-            str mediaport;
-            str mediatransport;
-            str mediapayload;
-            int is_rtp;
+            endpoint_stream_t *head = NULL;
+            sdp_info_t *sdp_info = (sdp_info_t*)msg->body;
 
-            if (extract_media_attr(&sdp, &mediamedia, &mediaport, &mediatransport, &mediapayload, &is_rtp) == 0)
-            {
-                char tmp[mediaport.len];
-                memcpy(tmp, mediaport.s, mediaport.len);
+            sdp_session_cell_t *sec;
+            for (sec = sdp_info->sessions; sec; sec = sec->next) {
+                sdp_stream_cell_t *stc;
+                for (stc = sec->streams; stc; stc = stc->next) {
+                    endpoint_stream_t *tmp;
+                    tmp = pkg_malloc(sizeof(endpoint_stream_t));
 
-                endpoint->rtp_port = atoi(tmp);
+                    tmp->media = stc->media;
+                    tmp->port = stc->port;
+                    tmp->rtcp_port = stc->rtcp_port;
+                    tmp->next = NULL;
+
+                    if (head == 0) {
+                        head = tmp;
+                    } else {
+                        head->next = tmp;
+                    }
+                }
             }
-            else
-            {
-                LM_ERR("Cannot parse RTP port.\n");
 
-                return -1;
-            }
+            endpoint->streams = head;
+
+            endpoint->call_id->s = msg->callid->body.s;
+            endpoint->call_id->len = msg->callid->body.len;
 
             str rtcp;
 
-            if (extract_rtcp(&sdp, &rtcp) == 0)
-            {
+            if (extract_rtcp(&sdp, &rtcp) == 0) {
                 char tmp[rtcp.len];
                 memcpy(tmp, rtcp.s, rtcp.len);
 
                 endpoint->rtcp_port = atoi(tmp);
-            }
-            else
-            {
+            } else {
                 endpoint->rtcp_port = endpoint->rtp_port + 2;
             }
 
@@ -49,15 +95,11 @@ int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint)
             sscanf(creator + 9, "%d.%d.%d.%d", &a, &b, &c, &d);
 
             char ip [50];
-
             int len = sprintf(ip, "%d.%d.%d.%d", a, b, c, d);
 
-            if (len > 0)
-            {
+            if (len > 0) {
                 strcpy(endpoint->ip, ip);
-            }
-            else
-            {
+            } else {
                 LM_ERR("Cannot parse media IP\n");
 
                 return -1;
@@ -83,14 +125,28 @@ int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint)
 
 void printEndpoint(endpoint_t *endpoint)
 {
-    LM_DBG("Endpoint:\n\tIP: %s\n\tRTP: %d\n\tRTCP: %d\n\tOrigin: %s\n\n",
-            endpoint->ip,
-            endpoint->rtp_port,
-            endpoint->rtcp_port,
-            endpoint->type == SIP_REQ ?
-                    "SIP_REQUEST" :
-                    "SIP_REPLY"
+    LM_DBG("Endpoint:\n\tIP: %s\n\tRTCP: %d\n\tOrigin: %s\n\n",
+        endpoint->ip,
+        endpoint->rtcp_port,
+        endpoint->type == SIP_REQ ?
+            "SIP_REQUEST" :
+            "SIP_REPLY"
     );
+
+    printEndpointStreams(endpoint->streams);
+}
+
+void printEndpointStreams(endpoint_stream_t *head)
+{
+    endpoint_stream_t *i;
+    for (i = head; i; i = i->next) {
+        LM_DBG(
+            "ENDPOINT STREAM:\n###############\nmedia: %.*s\nport: %.*s\nrtcp port: %.*s\n\n",
+            i->media.len, i->media.s,
+            i->port.len, i->port.s,
+            i->rtcp_port.len, i->rtcp_port.s
+        );
+    }
 }
 
 int initList(endpoint_t *head)
@@ -173,11 +229,11 @@ int removeEndpoint(endpoint_t *head, const char *ip)
  * Checks if endpoint is already in list
  * returns 1 if endpoint exists otherwise -1
  */
-int endpointExists(endpoint_t *head, const char *ip)
+int endpointExists(endpoint_t *head, const char *ip, int type)
 {
     endpoint_t *current = head;
     while (current->next != NULL) {
-        if (keyCmp(ip, current->ip) == 0) {
+        if (keyCmp(ip, current->ip) == 0 && current->type == type) {
             return 1;
         }
 
@@ -198,3 +254,27 @@ int keyCmp(const char *key, const char *value)
 
     return -1;
 }
+
+int findStream(endpoint_stream_t *head, endpoint_stream_t *stream, unsigned short port)
+{
+    endpoint_stream_t *s;
+    stream = NULL;
+
+    char* value_s;
+    int value_len;
+    value_s = int2str(port, &value_len);
+
+    for (s = head; s; s = s->next) {
+        char * s_port;
+        memcpy(&s_port, s->port.s, s->port.len);
+        s_port[s->port.len] = '\0';
+
+        if (strcmp(s_port, value_s)) {
+            stream = s;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+

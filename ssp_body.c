@@ -300,7 +300,9 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri)
             *seRtcp;
 
     char *pattern;
-    asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{0,5})/\\1%s/", (char *) host_port.s);
+    // if stream is set to 0 we don't want to change it so we will skip all ports < 10
+    // todo: exclude 0 from regex
+    asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})/\\1%s/g", (char *) host_port.s);
 
     str *subst;
     subst = (str *) pkg_malloc(sizeof(str));
@@ -309,7 +311,7 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri)
 
     seMedia = subst_parser(subst);
 
-    asprintf(&pattern, "/(a=rtcp: *)([0-9]{0,5})/\\1%s/", (char *) host_port.s);
+    asprintf(&pattern, "/(a=rtcp: *)([[:digit:]]{0,5})/\\1%s/g", (char *) host_port.s);
 
     subst->s = pattern;
     subst->len = strlen(pattern);
@@ -318,18 +320,22 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri)
     int count = 0;
     str *newBody, *tmpBody;
     char const *oldBody = (char const *) sdp.s;
-    struct replacedPort *rtp_ports, *rtcp_port;
-    rtp_ports = pkg_malloc(sizeof(struct replacedPort));
-    rtcp_port = pkg_malloc(sizeof(struct replacedPort));
+//    struct replacedPort *rtp_ports, *rtcp_port;
+//    rtp_ports = pkg_malloc(sizeof(struct replacedPort));
+//    rtcp_port = pkg_malloc(sizeof(struct replacedPort));
 
-    newBody = ssp_subst_str(oldBody, msg, seMedia, &count, rtp_ports);
+    //todo: remove ssp_subst_str and use subst_str instead since all neede information
+    // are parsed in parseEndpoint
+    newBody = subst_str(oldBody, msg, seMedia, &count);
+//    newBody = ssp_subst_str(oldBody, msg, seMedia, &count, rtp_ports);
 
     LM_DBG("Found %d matches for %s\nin body:\n%s\n", count, seMedia->replacement.s, oldBody);
 
     if (count > 0) {
         count = 0;
         oldBody = (char const *) newBody->s;
-        tmpBody = ssp_subst_str(oldBody, msg, seRtcp, &count, rtcp_port);
+        tmpBody = subst_str(oldBody, msg, seRtcp, &count);
+//        tmpBody = ssp_subst_str(oldBody, msg, seRtcp, &count, rtcp_port);
 
         if (count > 0) {
             newBody->s = tmpBody->s;

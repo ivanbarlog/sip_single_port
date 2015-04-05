@@ -24,7 +24,7 @@
 #define RTCP 4
 
 typedef enum {MEDIA_ATTRIBUTE, RTCP_ATTRIBUTE} replacedType;
-typedef enum {AUDIO, VIDEO, TEXT, APPLICATION, MESSAGE, OTHER} mediaType;
+typedef enum { AUDIO, VIDEO, TEXT, APPLICATION, MESSAGE, OTHER } mediaType;
 
 typedef struct replacedPort
 {

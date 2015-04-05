@@ -56,6 +56,11 @@ static int mod_init(void);
 int msg_received(void *data);
 int msg_sent(void *data);
 
+/**
+ * Head of endpoint list
+ */
+endpoint_t * head = NULL;
+
 /** module parameters */
 str _host_uri = {0, 0};
 str _host_port = str_init("5060");
@@ -85,25 +90,25 @@ struct module_exports exports = {
 /**
  * init module function
  */
-static int mod_init(void)
-{
+static int mod_init(void) {
+
+	initList(head);
+
 	sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
 //	sr_event_register_cb(SREV_NET_DATA_IN, tdb_msg_received);
 	sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-	#ifdef USE_TCP
+#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
 
 	return 0;
 }
 
-endpoint_t * head = NULL;
+//int printed = 0;
 
-int printed = 0;
-
-endpoint_t * request_ep = NULL;
-endpoint_t * reply_ep = NULL;
+//endpoint_t * request_ep = NULL;
+//endpoint_t * reply_ep = NULL;
 
 /**
  *
@@ -132,68 +137,96 @@ int msg_received(void *data)
 
 	int msg_type = get_msg_type(&msg);
 
+	endpoint_t *endpoint;
+
 	switch (msg_type)
 	{
-		case SIP_REQ:
-			if (request_ep == NULL)
-			{
-				LM_DBG("writing endpoint %d\n", msg_type);
+		case SIP_REQ: // no break
 
-				request_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
+//			endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
+//
+//			if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
+//				if (endpointExists(head, endpoint->ip, endpoint->type) == 1) {
+//					LM_ERR("Endpoint already exists.");
+//					goto done;
+//				}
+//
+//				pushEndpoint(head, endpoint);
+//			}
 
-				if (parseEndpoint(&msg, request_ep) == 0)
-				{
-					request_ep->type = msg_type;
-
-					memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
-					request_ep->ip_address.sin_family = AF_INET;
-					request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
-					request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
-
-					printEndpoint(request_ep);
-				}
-				else
-				{
-					LM_DBG("reset request_ep\n");
-					pkg_free(request_ep);
-					request_ep = NULL;
-				}
-			}
-			else
-			{
-				LM_DBG("not writing endpoint %d\n", msg_type);
-			}
-			break;
+//			if (request_ep == NULL)
+//			{
+//				LM_DBG("writing endpoint %d\n", msg_type);
+//
+//				request_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
+//
+//				if (parseEndpoint(&msg, request_ep, msg_type) == 0)
+//				{
+//					request_ep->type = msg_type;
+//
+//					memset((char *) &(request_ep->ip_address), 0, sizeof(request_ep->ip_address));
+//					request_ep->ip_address.sin_family = AF_INET;
+//					request_ep->ip_address.sin_addr.s_addr = inet_addr(request_ep->ip);
+//					request_ep->ip_address.sin_port = htons(request_ep->rtp_port);
+//
+//					printEndpoint(request_ep);
+//				}
+//				else
+//				{
+//					LM_DBG("reset request_ep\n");
+//					pkg_free(request_ep);
+//					request_ep = NULL;
+//				}
+//			}
+//			else
+//			{
+//				LM_DBG("not writing endpoint %d\n", msg_type);
+//			}
+//			break;
 
 		case SIP_REP:
-			if (reply_ep == NULL)
-			{
-				LM_DBG("writing endpoint %d\n", msg_type);
+			endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
 
-				reply_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
-
-				if (parseEndpoint(&msg, reply_ep) == 0)
-				{
-					reply_ep->type = msg_type;
-
-				        memset((char *) &(reply_ep->ip_address), 0, sizeof(reply_ep->ip_address));
-				        reply_ep->ip_address.sin_family = AF_INET;
-				        reply_ep->ip_address.sin_addr.s_addr = inet_addr(reply_ep->ip);
-		        		reply_ep->ip_address.sin_port = htons(reply_ep->rtp_port);
-
-					printEndpoint(reply_ep);
+			if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
+				if (endpointExists(head, endpoint->ip, endpoint->type) == 1) {
+					LM_ERR("Endpoint already exists.");
+					goto done;
 				}
-				else
-				{
-					LM_DBG("reset reply_ep\n");
-					pkg_free(reply_ep);
-					reply_ep = NULL;
-				}
+
+				pushEndpoint(head, endpoint);
+
+				printEndpoint(endpoint);
 			}
-			else
-			{
-				LM_DBG("not writing endpoint %d\n", msg_type);
-			}
+
+
+//			if (reply_ep == NULL)
+//			{
+//				LM_DBG("writing endpoint %d\n", msg_type);
+//
+//				reply_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
+//
+//				if (parseEndpoint(&msg, reply_ep, msg_type) == 0)
+//				{
+//					reply_ep->type = msg_type;
+//
+//				        memset((char *) &(reply_ep->ip_address), 0, sizeof(reply_ep->ip_address));
+//				        reply_ep->ip_address.sin_family = AF_INET;
+//				        reply_ep->ip_address.sin_addr.s_addr = inet_addr(reply_ep->ip);
+//		        		reply_ep->ip_address.sin_port = htons(reply_ep->rtp_port);
+//
+//					printEndpoint(reply_ep);
+//				}
+//				else
+//				{
+//					LM_DBG("reset reply_ep\n");
+//					pkg_free(reply_ep);
+//					reply_ep = NULL;
+//				}
+//			}
+//			else
+//			{
+//				LM_DBG("not writing endpoint %d\n", msg_type);
+//			}
 			break;
 
 		case RTP: //no break
@@ -206,62 +239,74 @@ int msg_received(void *data)
 
             ri = (struct receive_info*) d[2];
 
-			if (ri != NULL && request_ep != NULL && reply_ep != NULL)
-			{
-				sprintf(src_ip, "%d.%d.%d.%d",
+			sprintf(src_ip, "%d.%d.%d.%d",
 					ri->src_ip.u.addr[0],
 					ri->src_ip.u.addr[1],
 					ri->src_ip.u.addr[2],
 					ri->src_ip.u.addr[3]
-				);
-				
-				/**
-				 * compare src_ip with request and reply endpoint
-				 * to know where to send RTP packet
-				 */
-				LM_DBG("\n\nsrc_ip: %s\nrequest_ip: %s\nreply_ip: %s\n\n", src_ip, request_ep->ip, reply_ep->ip);
+			);
 
-				if (strcmp(src_ip, request_ep->ip))
-				{
-					LM_DBG("sending to request\n");
-					dst_ip = request_ep->ip_address;
-				}
-				else if (strcmp(src_ip, reply_ep->ip))
-				{
-					LM_DBG("sending to reply\n");
-					dst_ip = reply_ep->ip_address;
-				}
-				else
-				{
-					LM_DBG("do not know where to send packet\n");
-					goto done;
-				}
-				
-				int sent_bytes = sendto(bind_address->socket, obuf->s, obuf->len, 0, (const struct sockaddr*) &dst_ip, sizeof(struct sockaddr_in));
+			LM_DBG(
+					"AAA:\nsrc_ip: %s\nsrc_port: %d\ndst_port: %d\n",
+					src_ip, ri->src_port, ri->dst_port
+			);
 
-				if (sent_bytes != obuf->len)
-				{
-					LM_DBG("failed to send packet\n");
-					goto done;
-				}
-				else
-				{
-					LM_DBG("packet sent successfully\n");
-				}
+//			endpoint_t *endpoint;
+//
+//			if (findEndpoint(head, ))
+//
+//			endpoint_stream_t *stream;
+//
+//			if (findStream(endpoint->streams, *stream, ri->dst_port) == 0)
+//			{
+//
+//			}
 
-			}
-			else
-			{
-				LM_DBG("receive info is null\n");
-				goto done;
-			}
 
-			if (printed == 0)
-			{
-				printEndpoint(request_ep);
-				printEndpoint(reply_ep);
-				printed = 1;
-			}
+//			if (ri != NULL && request_ep != NULL && reply_ep != NULL)
+//			{
+//
+//
+//				/**
+//				 * compare src_ip with request and reply endpoint
+//				 * to know where to send RTP packet
+//				 */
+//				LM_DBG("\n\nsrc_ip: %s\nrequest_ip: %s\nreply_ip: %s\n\n", src_ip, request_ep->ip, reply_ep->ip);
+//
+//				if (strcmp(src_ip, request_ep->ip))
+//				{
+//					LM_DBG("sending to request\n");
+//					dst_ip = request_ep->ip_address;
+//				}
+//				else if (strcmp(src_ip, reply_ep->ip))
+//				{
+//					LM_DBG("sending to reply\n");
+//					dst_ip = reply_ep->ip_address;
+//				}
+//				else
+//				{
+//					LM_DBG("do not know where to send packet\n");
+//					goto done;
+//				}
+//
+//				int sent_bytes = sendto(bind_address->socket, obuf->s, obuf->len, 0, (const struct sockaddr*) &dst_ip, sizeof(struct sockaddr_in));
+//
+//				if (sent_bytes != obuf->len)
+//				{
+//					LM_DBG("failed to send packet\n");
+//					goto done;
+//				}
+//				else
+//				{
+//					LM_DBG("packet sent successfully\n");
+//				}
+//
+//			}
+//			else
+//			{
+//				LM_DBG("receive info is null\n");
+//				goto done;
+//			}
 
 			break;
 		default:
