@@ -98,10 +98,12 @@ static int mod_init(void)
 	return 0;
 }
 
+endpoint_t * head = NULL;
+
 int printed = 0;
 
-endpoint * request_ep = NULL;
-endpoint * reply_ep = NULL;
+endpoint_t * request_ep = NULL;
+endpoint_t * reply_ep = NULL;
 
 /**
  *
@@ -137,7 +139,7 @@ int msg_received(void *data)
 			{
 				LM_DBG("writing endpoint %d\n", msg_type);
 
-				request_ep = (endpoint *)pkg_malloc(sizeof(endpoint));
+				request_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
 
 				if (parseEndpoint(&msg, request_ep) == 0)
 				{
@@ -168,7 +170,7 @@ int msg_received(void *data)
 			{
 				LM_DBG("writing endpoint %d\n", msg_type);
 
-				reply_ep = (endpoint *)pkg_malloc(sizeof(endpoint));
+				reply_ep = (endpoint_t *)pkg_malloc(sizeof(endpoint_t));
 
 				if (parseEndpoint(&msg, reply_ep) == 0)
 				{
@@ -206,7 +208,6 @@ int msg_received(void *data)
 
 			if (ri != NULL && request_ep != NULL && reply_ep != NULL)
 			{
-				/*int len =*/
 				sprintf(src_ip, "%d.%d.%d.%d",
 					ri->src_ip.u.addr[0],
 					ri->src_ip.u.addr[1],
@@ -283,23 +284,13 @@ int msg_sent(void *data) {
 	msg.buf = obuf->s;
 	msg.len = obuf->len;
 
-
-    // todo:
-    // if INVITE changeRtpAndRtcpPort
-    // if ~200 changeRtpAndRtcpPort
-
 	if (skip_media_changes(&msg) < 0) {
 		goto done;
 	}
 
-	LM_DBG("before changing RTP: \n\n%d\n%s\n", msg.len, msg.buf);
 	if (changeRtpAndRtcpPort(&msg, _host_port, _host_uri) == 1) {
-		LM_DBG("changedRTP: \n\n%d\n%s\n", msg.len, msg.buf);
-
 		obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
 	}
-
-	LM_DBG("SENT:\n\n'%s'\n", obuf->s);
 
 done:
 	free_sip_msg(&msg);

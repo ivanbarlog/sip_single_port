@@ -232,51 +232,38 @@ str* ssp_subst_str(
     res->len=len;
 
 
-    /*
-     * dest - finalny text
-     * p - kopia inputu
-     * input - povodny text
-     */
-
     int assigned = 0;
 
     /* replace */
     dest=res->s;
     p=input;
     for(l=lst; l; l=l->next) {
-        struct replacedPort *current;
-        current = pkg_malloc(sizeof(struct replacedPort));
-//        current->text.s = pkg_malloc(sizeof(char) * l->size);
+        struct replacedPort *tmp;
+        tmp = pkg_malloc(sizeof(struct replacedPort));
 
         char * str;
-        memcpy(str, input + l->offset, l->size + 1);
+        str = pkg_malloc(sizeof(char) * (l->size + 1));
+        memcpy(str, input + l->offset, l->size);
         str[l->size] = '\0';
 
-//        memcpy(current->text.s, input + l->offset, l->size);
-//        current->text.s[l->size] = 0;
-//        current->text.len = strlen(current->text.s);
-//        current->offset = l->offset;
         int result = 0;
-        result = sscanf(str, "%*s%hu", &(current->port));
+        result = sscanf(str, "%*s%hu", &(tmp->port));
+        tmp->type = MEDIA_ATTRIBUTE;
 
         if (result < 0) {
-            sscanf(str, "a=rtcp:%hu", &(current->port));
+            sscanf(str, "a=rtcp:%hu", &(tmp->port));
+            tmp->type = RTCP_ATTRIBUTE;
         }
-
-        LM_DBG("PORT NUMBER: %d in string: %s\n\n", current->port, str);
-
-//        &(current->port)
+        tmp->next = NULL;
 
         if (assigned == 0) {
-            LM_DBG("GGG assigned = %d\n", assigned);
-            ports = current;
+            LM_DBG("PORT NUMBER: %d in string: %s\n\n", tmp->port, str);
+            ports = tmp;
             assigned = 1;
         } else {
-            LM_DBG("GGG assigned = %d\n", assigned);
-            ports->next = current;
+            LM_DBG("ANOTHER PORT NUMBER: %d in string: %s\n\n", tmp->port, str);
+            ports->next = tmp;
         }
-
-//        LM_DBG("HHH\n\nl->offset: %d, l->size: %d\n", l->offset, l->size);
 
         size = l->offset + input - p;
         memcpy(dest, p, size); /* copy till offset */
@@ -300,18 +287,13 @@ str* ssp_subst_str(
     return 0;
 }
 
-int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
-
-    LM_DBG("\n\n\nbefore parsing sdp\n\n\n");
-
+int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri)
+{
     str sdp = {0, 0};
     if (get_msg_body(msg, &sdp) != 0)
     {
         goto error;
     }
-
-    LM_DBG("\n\n\nsdp present and parsed\n\n\n");
-
 
     struct subst_expr
             *seMedia,
@@ -332,8 +314,6 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
     subst->s = pattern;
     subst->len = strlen(pattern);
     seRtcp = subst_parser(subst);
-
-//    LM_DBG("Pattern for replacement (from *subst_expr): %s, %d\n", seMedia->replacement.s, seMedia->replacement.len);
 
     int count = 0;
     str *newBody, *tmpBody;
@@ -367,9 +347,6 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 //        int ctr = 0;
 //        struct replacedPort *i;
 //        for(i = rtp_ports; i; i=i->next) {
-//            if (i->port == NULL) {
-//                break;
-//            }
 //            LM_DBG("%d.: %d\n", ctr, i->port);
 //            ctr++;
 //        }
@@ -382,4 +359,20 @@ int changeRtpAndRtcpPort(struct sip_msg *msg, str host_port, str host_uri) {
 error:
     LM_ERR("Cannot change SDP.\n");
     return -1;
+}
+
+int getMediaType(const char *type) {
+    if (strcmp(type, "audio") == 0) {
+        return AUDIO;
+    } else if (strcmp(type, "video") == 0) {
+        return VIDEO;
+    } else if (strcmp(type, "text") == 0) {
+        return TEXT;
+    } else if (strcmp(type, "application") == 0) {
+        return APPLICATION;
+    } else if (strcmp(type, "message") == 0) {
+        return MESSAGE;
+    } else {
+        return OTHER;
+    }
 }

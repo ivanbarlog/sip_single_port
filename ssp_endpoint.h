@@ -29,13 +29,24 @@ typedef struct endpoint
     /* SIP_REQ or SIP_REP */
     unsigned short type;
 
+    struct endpoint *prev;
     struct endpoint *next;
 
-} endpoint;
+} endpoint_t;
 
 
-int parseEndpoint(struct sip_msg *msg, struct endpoint *endpoint);
+int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint);
 
-void printEndpoint(struct endpoint *endpoint);
+void printEndpoint(endpoint_t *endpoint);
+
+int initList(endpoint_t *head);
+
+void pushEndpoint(endpoint_t *head, endpoint_t *endpoint);
+
+int findEndpoint(endpoint_t *head, const char * ip, endpoint_t *endpoint);
+
+int removeEndpoint(endpoint_t *head, const char *ip);
+
+int keyCmp(const char *key, const char *value);
 
 #endif //_KAMAILIO_SSP_ENDPOINT_H_
