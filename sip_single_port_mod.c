@@ -142,6 +142,7 @@ int msg_received(void *data)
 
 			if (findConnection(call_id, connection) == -1) {
 				connection = createConnection(call_id);
+				pushConnection(connection);
 			}
 
 			if (connection->request_endpoint != NULL) {
@@ -165,6 +166,7 @@ int msg_received(void *data)
 
 			if (findConnection(call_id, connection) == -1) {
 				connection = createConnection(call_id);
+				pushConnection(connection);
 			}
 
 			if (connection->response_endpoint != NULL) {
@@ -207,6 +209,8 @@ int msg_received(void *data)
 					ri->src_ip.u.addr[2],
 					ri->src_ip.u.addr[3]
 			);
+
+			//todo: debug persisting of connections
 
 			LM_DBG(
 					"AAA:\nsrc_ip: %s\nsrc_port: %d\ndst_port: %d\n",

@@ -91,6 +91,8 @@ int findStream(endpoint_stream_t *head, endpoint_stream_t *stream, unsigned shor
  */
 int initConnectionList();
 
+void pushConnection(connection_t *connection);
+
 int findConnection(const char *call_id, connection_t *connection);
 
 int findConnectionBySrcIp(const char *src_ip, connection_t *connection);

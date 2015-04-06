@@ -23,8 +23,25 @@ int initConnectionList()
     }
     connections->prev = NULL;
     connections->next = NULL;
+    connections->request_endpoint = NULL;
+    connections->response_endpoint = NULL;
 
     return 0;
+}
+
+void pushConnection(connection_t *connection)
+{
+    initConnectionList();
+
+    connection_t *current;
+    current = connections;
+    while (current->next != NULL) {
+        current = current->next;
+    }
+
+    current->next = connection;
+    current->next->next = NULL;
+    current->next->prev = current;
 }
 
 int findConnection(const char *call_id, connection_t *connection)
@@ -34,6 +51,9 @@ int findConnection(const char *call_id, connection_t *connection)
     connection_t *c;
 
     for (c = connections; c; c = c->next) {
+
+        LM_DBG("comparing: '%s' and '%s'", c->call_id, call_id);
+
         if (strcmp(c->call_id, call_id) == 0) {
             connection = c;
             return 1;
