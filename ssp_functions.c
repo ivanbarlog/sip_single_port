@@ -38,3 +38,37 @@ int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *
 
     return 0;
 }
+
+int parse_call_id(sip_msg_t *msg, str *call_id) {
+    if (parse_headers(msg, HDR_CALLID_F, 0) != 0) {
+        ERR("error parsing CallID header\n");
+        return -1;
+    }
+
+    if (msg->callid == NULL || msg->callid->body.s == NULL) {
+        ERR("NULL call-id header\n");
+        return -1;
+    }
+
+    call_id = (str *) msg->callid->parsed;
+
+    return 0;
+}
+
+int get_msg_body(struct sip_msg *msg, str *body) {
+    body->s = get_body(msg);
+    if (body->s == 0) {
+        return -1;
+    }
+
+    body->len = msg->len - (body->s - msg->buf);
+
+    if (!msg->content_length) {
+        return -1;
+    }
+    if (body->len != get_content_length(msg)) {
+        WARN("Content length header value different than body size\n");
+    }
+
+    return 0;
+}

@@ -11,8 +11,8 @@
 
 typedef struct connection {
     str *call_id;
-    char request_endpoint_ip[50];
-    char response_endpoint_ip[50];
+    char *request_endpoint_ip;
+    char *response_endpoint_ip;
 
     endpoint_t *request_endpoint;
     endpoint_t *response_endpoint;

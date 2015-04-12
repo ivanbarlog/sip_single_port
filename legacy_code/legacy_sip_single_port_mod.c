@@ -228,7 +228,6 @@ int msg_received(void *data)
 
 			struct receive_info * ri;
 			char src_ip[50];
-//			struct sockaddr_in dst_ip;
 
             ri = (struct receive_info*) d[2];
 

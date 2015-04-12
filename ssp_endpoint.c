@@ -4,22 +4,9 @@ static int parse_creator_ip(sip_msg_t *msg, char *ip) {
     unsigned int a, b, c, d, success;
     char *creator;
     str sdp = {0, 0};
-
-    sdp.s = get_body(msg);
-    if (sdp.s == 0) {
-        ERR("Cannot extract body from msg\n");
+    if (get_msg_body(msg, &sdp) != 0) {
+        ERR("Cannot parse SDP.");
         return -1;
-    }
-
-    sdp.len = msg->len - (sdp.s - msg->buf);
-
-    if (!msg->content_length) {
-        ERR("No Content-Length header found\n");
-        return -1;
-    }
-
-    if (sdp.len != get_content_length(msg)) {
-        WARN("Content-Length header value differs from SDP size\n");
     }
 
     // todo: this needs to be refactored so also IPv6 is supported (stream has c= information parsed)

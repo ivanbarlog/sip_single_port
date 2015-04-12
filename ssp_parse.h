@@ -2,6 +2,7 @@
 #define KAMAILIO_SSP_PARSE_H
 
 #include "../../parser/msg_parser.h"
+#include "../../parser/parse_fline.h"
 
 /**
  * Checks if SIP message initializes dialog

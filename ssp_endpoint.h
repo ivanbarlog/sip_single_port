@@ -13,6 +13,7 @@
 #include "../../mem/mem.h"
 
 #include "ssp_stream.h"
+#include "ssp_functions.h"
 
 /**
  * Structure that holds IP of endpoint which

@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../../parser/msg_parser.h"
+#include "../../parser/hf.h"
+#include "../../parser/parse_content.h"
 
 typedef enum msg_type {
     SSP_SIP_REQUEST,
@@ -26,5 +28,16 @@ msg_type get_msg_type(sip_msg_t *msg);
  * Returns sockaddr structure from specified IP and port
  */
 int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *ip);
+
+/**
+ * Parses Call-ID from message
+ * Returns 0 on success, -1 otherwise
+ */
+int parse_call_id(sip_msg_t *msg, str *call_id);
+
+/**
+ * Checks wether message contains SDP body
+ */
+int get_msg_body(struct sip_msg *msg, str *body);
 
 #endif //KAMAILIO_SSP_FUNCTIONS_H

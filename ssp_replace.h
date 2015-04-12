@@ -1,13 +1,27 @@
 #ifndef KAMAILIO_SSP_REPLACE_H
 #define KAMAILIO_SSP_REPLACE_H
 
+#define _GNU_SOURCE
+
+#include <stdio.h>
 #include "../../str.h"
 #include "../../parser/msg_parser.h"
+#include "../../re.h"
+#include "../../msg_translator.h"
+#include "../../parser/parse_fline.h"
+#include "../../lump_struct.h"
+#include "../../data_lump.h"
+#include "../../ut.h"
+#include "../../config.h"
+#include "../../parser/parse_fline.h"
+#include "../../parser/parse_cseq.h"
+
+#include "ssp_functions.h"
 
 /**
  * Updates SIP message before it is sent by Kamailio
  */
-char * update_msg(sip_msg_t *msg, unsigned int *len);
+char *update_msg(sip_msg_t *msg, unsigned int *len);
 
 /**
  * Adds RTCP directive to body (as a body_lump) if not present
@@ -29,16 +43,9 @@ int add_rtcp_field(sip_msg_t *msg, unsigned short rtp_port);
 int change_media_ports(sip_msg_t *msg, str host_port);
 
 /**
- *
+ * Returns 1 if SIP message is INVITE request or ~200 OK response to INVITE,
+ * otherwise -1
  */
 int skip_media_changes(sip_msg_t *msg);
-
-/**
- * Removes old body from SIP message and sets
- * the new one provided in argument.
- *
- * todo: should be static
- */
-int ssp_set_body(sip_msg_t *msg, str *body);
 
 #endif //KAMAILIO_SSP_REPLACE_H
