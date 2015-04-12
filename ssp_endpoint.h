@@ -1,102 +1,47 @@
-#ifndef _KAMAILIO_SSP_ENDPOINT_H_
-#define _KAMAILIO_SSP_ENDPOINT_H_
+#ifndef KAMAILIO_SSP_ENDPOINT_H
+#define KAMAILIO_SSP_ENDPOINT_H
+
+#define _GNU_SOURCE //allows us to use asprintf
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "../../str.h"
+
 #include <netinet/in.h>
-#include <arpa/inet.h>
-
-#include "../../dprint.h"
-#include "../../parser/sdp/sdp.h"
 #include "../../parser/msg_parser.h"
-#include "../../parser/sdp/sdp_helpr_funcs.h"
+#include "../../parser/parse_content.h"
+#include "../../parser/sdp/sdp.h"
+#include "../../mem/mem.h"
 
-#include "ssp_funcs.h"
-#include "ssp_body.h"
+#include "ssp_stream.h"
 
-typedef struct endpoint_stream
-{
-    str media;
-    str port;
-    str rtcp_port;
-
-    struct endpoint_stream *prev;
-    struct endpoint_stream *next;
-} endpoint_stream_t;
-
-//typedef enum {SIP_REQ, SIP_REP} endpointType;
-
-/** endpoint structure */
-typedef struct endpoint
-{
-    str *call_id;
-
-    // obsolete = replaced by streams
-    // todo: remove
-    unsigned short rtp_port;
-
-    endpoint_stream_t *streams;
-    unsigned short rtcp_port;
-    char ip [50];
+/**
+ * Structure that holds IP of endpoint which
+ * is present in SIP dialog
+ * It also holds linked list of media streams
+ * which are transported from endpoint
+ */
+typedef struct endpoint {
+    char *ip;
 
     /* usable in UDP socket communication */
     struct sockaddr_in ip_address;
 
-    /* SIP_REQ or SIP_REP */
-    //todo: change to endpointType
-    unsigned short type;
-
-    struct endpoint *prev;
-    struct endpoint *next;
+    /* list of all media streams */
+    struct endpoint_stream *streams;
 
 } endpoint_t;
 
-typedef struct connection
-{
-    str call_id;
-
-    endpoint_t *request_endpoint;
-    endpoint_t *response_endpoint;
-
-    struct connection *prev;
-    struct connection *next;
-
-} connection_t;
-
-int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type);
-
-void printEndpoint(endpoint_t *endpoint);
-
-int initEndpointList();
-
-void pushEndpoint(endpoint_t *endpoint);
-
-int findEndpoint(const char * ip, endpoint_t *endpoint);
-
-int removeEndpoint(const char *ip);
-
-int endpointExists(const char *ip, int type);
-
-int keyCmp(const char *key, const char *value);
-
-void printEndpointStreams(endpoint_stream_t *head);
-
-struct sockaddr_in* getStreamAddress(endpoint_t *endpoint, const char *streamType);
-
-int findStream(endpoint_stream_t *head, endpoint_stream_t *stream, unsigned short port);
+/**
+ * Parses endpoint from sip_msg structure
+ * Returns 0 on success, -1 otherwise
+ * If parsing fails endpoint is set to NULL
+ */
+int parse_endpoint(sip_msg_t *msg, endpoint_t *endpoint);
 
 /**
- * connection methods
+ * Returns string containing formatted endpoint structure
+ * which can be used with LM_* macros
  */
-void printConnections();
+char *print_endpoint(endpoint_t *endpoint);
 
-void pushConnection(connection_t *tmp);
-
-int findConnection(str call_id, connection_t *connection);
-
-int findConnectionBySrcIp(const char *src_ip, connection_t *connection);
-
-connection_t * createConnection(str call_id);
-
-#endif //_KAMAILIO_SSP_ENDPOINT_H_
+#endif //KAMAILIO_SSP_ENDPOINT_H
