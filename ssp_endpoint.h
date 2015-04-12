@@ -54,7 +54,7 @@ typedef struct endpoint
 
 typedef struct connection
 {
-    char call_id[100];
+    str call_id;
 
     endpoint_t *request_endpoint;
     endpoint_t *response_endpoint;
@@ -89,14 +89,14 @@ int findStream(endpoint_stream_t *head, endpoint_stream_t *stream, unsigned shor
 /**
  * connection methods
  */
-int initConnectionList();
+void printConnections();
 
-void pushConnection(connection_t *connection);
+void pushConnection(connection_t *tmp);
 
-int findConnection(const char *call_id, connection_t *connection);
+int findConnection(str call_id, connection_t *connection);
 
 int findConnectionBySrcIp(const char *src_ip, connection_t *connection);
 
-connection_t * createConnection(const char *call_id);
+connection_t * createConnection(str call_id);
 
 #endif //_KAMAILIO_SSP_ENDPOINT_H_

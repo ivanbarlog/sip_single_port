@@ -128,24 +128,40 @@ int msg_received(void *data)
 	endpoint_t *endpoint;
 	connection_t *connection = NULL;
 
-	char * call_id;
+	str call_id;
 
+	printConnections();
+
+	// todo this should be replaced by handleMessageByType(&msg, msg_type)
 	switch (msg_type)
 	{
 		case SIP_REQ: // no break
-			if (msg.callid == NULL) {
-				LM_DBG("cannot parse message call id");
+
+			if (skip_media_changes(&msg) == -1) {
+				LM_DBG("message is not INVITE request or ~200 response\n");
 				goto done;
 			}
 
-			memcpy(&call_id, msg.callid->body.s, msg.callid->body.len);
+			if (parse_headers(&msg, HDR_CALLID_F, 0) != 0)
+			{
+				LM_ERR("error parsing CallID header\n");
+				goto done;
+			}
+
+			if(msg.callid == NULL || msg.callid->body.s == NULL)
+			{
+				LM_ERR("NULL call-id header\n");
+				goto done;
+			}
+
+			call_id = msg.callid->body;
 
 			if (findConnection(call_id, connection) == -1) {
 				connection = createConnection(call_id);
 				pushConnection(connection);
 			}
 
-			if (connection->request_endpoint != NULL) {
+			if (connection->request_endpoint == NULL) {
 				endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
 
 				if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
@@ -157,19 +173,32 @@ int msg_received(void *data)
 			break;
 
 		case SIP_REP:
-			if (msg.callid == NULL) {
-				LM_DBG("cannot parse message call id");
+
+			if (skip_media_changes(&msg) == -1) {
+				LM_DBG("message is not INVITE request or ~200 response\n");
 				goto done;
 			}
 
-			memcpy(&call_id, msg.callid->body.s, msg.callid->body.len);
+			if (parse_headers(&msg, HDR_CALLID_F, 0) != 0)
+			{
+				LM_ERR("error parsing CallID header\n");
+				goto done;
+			}
+
+			if(msg.callid == NULL || msg.callid->body.s == NULL)
+			{
+				LM_ERR("NULL call-id header\n");
+				goto done;
+			}
+
+			call_id = msg.callid->body;
 
 			if (findConnection(call_id, connection) == -1) {
 				connection = createConnection(call_id);
 				pushConnection(connection);
 			}
 
-			if (connection->response_endpoint != NULL) {
+			if (connection->response_endpoint == NULL) {
 				endpoint = (endpoint_t *) pkg_malloc(sizeof(endpoint_t));
 
 				if (parseEndpoint(&msg, endpoint, msg_type) == 0) {
@@ -199,7 +228,7 @@ int msg_received(void *data)
 
 			struct receive_info * ri;
 			char src_ip[50];
-			struct sockaddr_in dst_ip;
+//			struct sockaddr_in dst_ip;
 
             ri = (struct receive_info*) d[2];
 
@@ -218,7 +247,8 @@ int msg_received(void *data)
 			);
 
 			if (findConnectionBySrcIp(src_ip, connection) == 1) {
-				LM_DBG("found connection %s\n", connection->call_id);
+
+				LM_DBG("found connection %.*s\n", connection->call_id.len, connection->call_id.s);
 			}
 
 

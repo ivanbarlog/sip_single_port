@@ -15,6 +15,7 @@
 #include "../../ut.h"
 #include "../../config.h"
 #include "../../parser/parse_fline.h"
+#include "../../parser/parse_cseq.h"
 
 #include "ssp_funcs.h"
 

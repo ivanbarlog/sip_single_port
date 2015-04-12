@@ -10,92 +10,139 @@ static endpoint_t * head = NULL;
  */
 static connection_t * connections = NULL;
 
-int initConnectionList()
+void printConnections()
 {
-    if (connections != NULL) {
-        return 1;
+    if (connections == NULL) {
+        LM_ERR("Connections is NULL\n");
+        return;
     }
 
-    connections = pkg_malloc(sizeof(connection_t));
-    if (connections == 0) {
-        LM_ERR("out of memory");
-        return 1;
-    }
-    connections->prev = NULL;
-    connections->next = NULL;
-    connections->request_endpoint = NULL;
-    connections->response_endpoint = NULL;
+    connection_t *current;
+    current = connections;
 
-    return 0;
+    while (current->next != NULL) {
+        LM_DBG(
+            "### Connection:\nCallId: %.*s\n",
+            current->call_id.len, current->call_id.s
+        );
+        LM_DBG("### Request endpoint:\n");
+        printEndpoint(current->request_endpoint);
+        LM_DBG("### Response endpoint:\n");
+        printEndpoint(current->response_endpoint);
+
+        current = current->next;
+    }
+
 }
 
 void pushConnection(connection_t *connection)
 {
-    initConnectionList();
+    connection_t *tmp;
+    tmp = connection;
+
+    LM_DBG("Pushing call id: %.*s\n", tmp->call_id.len, tmp->call_id.s);
+
+    tmp->next = NULL;
+    tmp->prev = NULL;
+
+    if (connections == NULL) {
+        connections = tmp;
+        LM_DBG("Connections count: 1\n");
+    } else {
+        int ctr = 1;
+
+        connection_t *current;
+        current = connections;
+
+        while (current->next != NULL) {
+            current = current->next;
+            ctr++;
+        }
+
+        LM_DBG("Connections count: %d\n", ctr);
+
+        tmp->prev = current;
+        current->next = tmp;
+    }
+}
+
+int findConnection(str call_id, connection_t *connection)
+{
+    connection = NULL;
+
+    if (connections == NULL) {
+        LM_DBG("Connections is empty\n");
+        return -1;
+    }
 
     connection_t *current;
     current = connections;
+
     while (current->next != NULL) {
-        current = current->next;
-    }
+        LM_DBG(
+            "\ncomparing:\n'%.*s'\n'%.*s'\n",
+            current->call_id.len, current->call_id.s,
+            call_id.len, call_id.s
+        );
 
-    current->next = connection;
-    current->next->next = NULL;
-    current->next->prev = current;
-}
-
-int findConnection(const char *call_id, connection_t *connection)
-{
-    initConnectionList();
-
-    connection_t *c;
-
-    for (c = connections; c; c = c->next) {
-
-        LM_DBG("comparing: '%s' and '%s'", c->call_id, call_id);
-
-        if (strcmp(c->call_id, call_id) == 0) {
-            connection = c;
+        if (STR_EQ(current->call_id, call_id) == 1) {
+            LM_DBG("comparision result -> equal\n");
+            connection = current;
             return 1;
         }
-    }
 
-    connection = NULL;
+        LM_DBG("comparision result -> not equal\n");
+
+        current = current->next;
+    }
 
     return -1;
 }
 
 int findConnectionBySrcIp(const char *src_ip, connection_t *connection)
 {
-    initConnectionList();
+    connection = NULL;
 
-    connection_t *c;
-    c = connections;
-
-    if (c->request_endpoint == NULL || c->response_endpoint == NULL) {
-        LM_ERR("Both request and response endpoint must be defined\n");
+    if (connections == NULL) {
+        LM_DBG("Connections is empty.\n");
         return -1;
     }
 
-    while (c->next != NULL) {
-        if (strcmp(c->request_endpoint->ip, src_ip) == 1 || strcmp(c->response_endpoint->ip, src_ip) == 1) {
-            connection = c;
-            return 1;
-        }
-        c = c->next;
-    }
+    connection_t *current;
+    current = connections;
 
-    connection = NULL;
+    while (current->next != NULL) {
+        if ((current->request_endpoint && current->response_endpoint)) {
+            LM_DBG(
+                    "\ncomparing:\n%s\n%s\n%s\n",
+                    src_ip,
+                    current->request_endpoint->ip,
+                    current->response_endpoint->ip
+            );
+
+            if (strcmp(current->request_endpoint->ip, src_ip) == 0
+                || strcmp(current->response_endpoint->ip, src_ip) == 0) {
+                connection = current;
+                LM_DBG("equal\n");
+                return 1;
+            }
+            
+            LM_DBG("not equal\n");
+        }
+
+
+        current = current->next;
+    }
 
     return -1;
 }
 
-connection_t * createConnection(const char *call_id)
+connection_t * createConnection(str call_id)
 {
     connection_t *connection;
     connection = pkg_malloc(sizeof(connection_t));
 
-    strcpy(connection->call_id, call_id);
+    connection->call_id = call_id;
 
     connection->next = NULL;
     connection->prev = NULL;
@@ -235,14 +282,17 @@ int parseEndpoint(struct sip_msg *msg, endpoint_t *endpoint, int msg_type)
 }
 
 
-void printEndpoint(endpoint_t *endpoint)
-{
+void printEndpoint(endpoint_t *endpoint) {
+    if (endpoint == NULL) {
+        LM_ERR("Endpoint is NULL\n");
+    }
+
     LM_DBG("Endpoint:\n\tIP: %s\n\tRTCP: %d\n\tOrigin: %s\n\n",
-        endpoint->ip,
-        endpoint->rtcp_port,
-        endpoint->type == SIP_REQ ?
-            "SIP_REQUEST" :
-            "SIP_REPLY"
+           endpoint->ip,
+           endpoint->rtcp_port,
+           endpoint->type == SIP_REQ ?
+           "SIP_REQUEST" :
+           "SIP_REPLY"
     );
 
     printEndpointStreams(endpoint->streams);

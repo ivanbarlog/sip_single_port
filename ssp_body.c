@@ -15,12 +15,8 @@ char* update_msg(struct sip_msg *msg, unsigned int *olen)
     init_dest_info(&dst);
     dst.proto = PROTO_UDP;
 
-//    if (msg->first_line.type == SIP_REPLY) {
-//        return generate_res_buf_from_sip_res(msg, olen, BUILD_NO_VIA1_UPDATE);
-//    } else {
-        return build_req_buf_from_sip_req(msg,
-            olen, &dst, BUILD_NO_LOCAL_VIA|BUILD_NO_VIA1_UPDATE);
-//    }
+    return build_req_buf_from_sip_req(msg,
+        olen, &dst, BUILD_NO_LOCAL_VIA|BUILD_NO_VIA1_UPDATE);
 }
 
 int get_msg_type(struct sip_msg *msg)
@@ -41,7 +37,7 @@ int get_msg_type(struct sip_msg *msg)
             return -1;
         }
     }
-        //if it's not SIP it should be RTP/RTCP
+    //if it's not SIP it should be RTP/RTCP
     else
     {
         //second byte from first line
@@ -63,6 +59,9 @@ int get_msg_type(struct sip_msg *msg)
     }
 }
 
+
+//todo check if only 200 OK for Invite - DO NOT pass other 200 OK messages
+// http://www.in2eps.com/fo-sip/tk-fo-sip-dialog.html
 int skip_media_changes(struct sip_msg *msg)
 {
     if (parse_msg(msg->buf, msg->len, msg) == 0) {
@@ -71,14 +70,27 @@ int skip_media_changes(struct sip_msg *msg)
         {
             int method = msg->REQ_METHOD;
 
-            if (method == 1) {
+            if (method == METHOD_INVITE) {
+                LM_DBG("OOO:\nSIP REQUEST > INVITE\n");
                 return 1;
             }
         }
-        else if (msg->first_line.type == SIP_REPLY)
-        {
+        else if (msg->first_line.type == SIP_REPLY) {
+            if (parse_headers(msg, HDR_CSEQ_F, 0) != 0) {
+                LM_ERR("Cannot parse Cseq\n");
+                return -1;
+            }
+
+            if (&msg->cseq == NULL || &msg->cseq->body.s == NULL) {
+                LM_ERR("cseq not found\n");
+                return -1;
+            }
+
+//            LM_DBG("ZZZ:\nFound cseq: %.*s\n", ((struct cseq_body*) msg->cseq)->method.len, ((struct cseq_body*) msg->cseq)->method.s);
+//            LM_DBG("XXX:\n%d == %d\n", get_cseq(msg)->method_id, METHOD_INVITE);
             unsigned int code = msg->REPLY_STATUS;
-            if (code >= 200 && code < 300) {
+            if (code >= 200 && code < 300 && get_cseq(msg)->method_id == METHOD_INVITE) {
+                LM_DBG("OOO:\nSIP REPLY > ~200 OK > CSEQ INVITE\n");
                 return 1;
             }
         }
