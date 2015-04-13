@@ -12,6 +12,7 @@
 #include "../../parser/sdp/sdp.h"
 
 #include "ssp_endpoint.h"
+#include "ssp_functions.h"
 
 
 /**
@@ -22,11 +23,13 @@
  * RTP and RTCP ports for each media stream type
  */
 typedef struct endpoint_stream {
-    str media;
-    str port;
-    str rtcp_port;
+    char *media_raw;
+    str *media;
+    char *port_raw;
+    str *port;
+    char *rtp_port_raw;
+    str *rtcp_port;
 
-    struct endpoint_stream *prev;
     struct endpoint_stream *next;
 
 } endpoint_stream_t;
@@ -39,7 +42,7 @@ typedef struct endpoint_stream {
  * Returns 0 on success, -1 otherwise
  * If parsing fails streams is set to NULL
  */
-int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t *streams);
+int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams);
 
 /**
  * Returns socket address from streams list (provided by endpoint)
@@ -64,13 +67,13 @@ char *print_stream(endpoint_stream_t *stream);
  * Traverses all endpoint streams and returns printable string
  * Internally uses print_stream function
  */
-char *print_endpoint_streams(endpoint_stream_t *streams);
+char *print_endpoint_streams(endpoint_stream_t **streams);
 
 /**
  * Returns stream type by specified port
  * used to pair request/response ports
  */
-int get_stream_type(endpoint_stream_t *streams, unsigned short port, str *type);
+int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type);
 
 /**
  * Returns stream port by specified type

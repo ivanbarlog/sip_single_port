@@ -128,27 +128,33 @@ int msg_received(void *data) {
     msg.buf = obuf->s;
     msg.len = obuf->len;
 
-    str *call_id = NULL;
+    str call_id;
     int msg_type = get_msg_type(&msg);
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
-            if (parse_call_id(&msg, call_id) == -1) {
-                ERR("Cannot parse Call-ID\n");
-                goto done;
-            }
-
             if (initializes_dialog(&msg) == 0) {
-                endpoint_t *endpoint = NULL;
-                if (parse_endpoint(&msg, endpoint) == -1) {
+                if (parse_call_id(&msg, &call_id) == -1) {
+                    ERR("Cannot parse Call-ID\n");
+                    goto done;
+                }
+
+                LM_DBG("call-id: %.*s\n", call_id.len, call_id.s);
+
+                endpoint_t *endpoint;
+                endpoint = parse_endpoint(&msg);
+                if (endpoint == NULL) {
                     ERR("Cannot parse Endpoint\n");
                     goto done;
                 }
 
                 connection_t *connection = NULL;
-                if (find_connection_by_call_id(*call_id, connection) == -1) {
-                    if (create_connection(*call_id, connection) == -1) {
+                if (find_connection_by_call_id(call_id, &connection) == -1) {
+
+                    LM_DBG("FFF\nCreating connection with callid: [%.*s]\n", call_id.len, call_id.s);
+                    connection = create_connection(call_id);
+                    if (connection == NULL) {
                         ERR("Cannot create connection.\n");
                         goto done;
                     }
@@ -159,20 +165,53 @@ int msg_received(void *data) {
                     }
                 }
 
+                if (connection == NULL) {
+                    LM_ERR("ZZZ:\nshit happened\n");
+                } else {
+                    LM_DBG("ZZZ:\nconnection is not null yohooo\n");
+                }
+
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
+                    connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
+
                     connection->request_endpoint = endpoint;
-                    connection->request_endpoint_ip = endpoint->ip;
+
+                    asprintf(
+                            &(connection->request_endpoint_ip),
+                            "%s",
+                            endpoint->ip
+                    );
+
+//                    connection->request_endpoint = endpoint;
+//                    connection->request_endpoint_ip = endpoint->ip;
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
+                    connection->response_endpoint = pkg_malloc(sizeof(endpoint_t));
+
                     connection->response_endpoint = endpoint;
-                    connection->response_endpoint_ip = endpoint->ip;
+
+                    asprintf(
+                            &(connection->response_endpoint_ip),
+                            "%s",
+                            endpoint->ip
+                    );
+
+//                    connection->response_endpoint = endpoint;
+//                    connection->response_endpoint_ip = endpoint->ip;
                 }
             }
 
             if (terminates_dialog(&msg) == 0) {
-                remove_connection(*call_id);
+                if (parse_call_id(&msg, &call_id) == -1) {
+                    ERR("Cannot parse Call-ID\n");
+                    goto done;
+                }
+
+                remove_connection(call_id);
             }
+
+            LM_DBG("\n\nCONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -202,16 +241,26 @@ int msg_received(void *data) {
             }
 
             endpoint_t *endpoint = NULL;
-            if (find_counter_endpoint_by_ip(src_ip, endpoint) != 0) {
+            if (find_counter_endpoint_by_ip(src_ip, &endpoint) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }
 
             str *type = NULL;
-            get_stream_type(endpoint->streams, src_port, type);
-            get_stream_port(endpoint->streams, *type, &dst_port);
+            if (get_stream_type(endpoint->streams, src_port, &type) == -1) {
+                ERR("Cannot find stream with port '%d'\n", src_port);
+                goto done;
+            }
 
-            get_socket_addr(endpoint->ip, dst_port, dst_ip);
+            if (get_stream_port(endpoint->streams, *type, &dst_port) == -1) {
+                ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                goto done;
+            }
+
+            if (get_socket_addr(endpoint->ip, dst_port, dst_ip) == -1) {
+                ERR("Cannot instantiate socket address\n");
+                goto done;
+            }
 
             send_packet_to_endpoint(obuf, *dst_ip);
 

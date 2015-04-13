@@ -6,7 +6,7 @@ int initializes_dialog(sip_msg_t *msg) {
         if (msg->first_line.type == SIP_REQUEST) {
 
             if (msg->REQ_METHOD == METHOD_INVITE) {
-                return 1;
+                return 0;
             }
 
         } else if (msg->first_line.type == SIP_REPLY) {
@@ -21,7 +21,7 @@ int initializes_dialog(sip_msg_t *msg) {
 
             unsigned int code = msg->REPLY_STATUS;
             if (code >= 200 && code < 300 && get_cseq(msg)->method_id == METHOD_INVITE) {
-                return 1;
+                return 0;
             }
         }
     }
@@ -44,7 +44,7 @@ int terminates_dialog(sip_msg_t *msg) {
 
             unsigned int code = msg->REPLY_STATUS;
             if (code >= 200 && code < 300 && get_cseq(msg)->method_id == METHOD_BYE) {
-                return 1;
+                return 0;
             }
         }
     }

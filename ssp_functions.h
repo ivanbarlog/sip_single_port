@@ -4,6 +4,8 @@
 #define BIT6 0x40
 #define BIT5 0x20
 
+#define _GNU_SOURCE //allows us to use asprintf
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../../parser/msg_parser.h"
@@ -39,5 +41,13 @@ int parse_call_id(sip_msg_t *msg, str *call_id);
  * Checks wether message contains SDP body
  */
 int get_msg_body(struct sip_msg *msg, str *body);
+
+/**
+ * Changes dynamic str structure to char array
+ * Returns 0 on success, -1 otherwise
+ */
+int str_to_char(str *value, char **new_value);
+
+int copy_str(str *value, char **new_value, str **copy);
 
 #endif //KAMAILIO_SSP_FUNCTIONS_H

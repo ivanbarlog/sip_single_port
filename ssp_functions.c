@@ -50,7 +50,9 @@ int parse_call_id(sip_msg_t *msg, str *call_id) {
         return -1;
     }
 
-    call_id = (str *) msg->callid->parsed;
+    *call_id = msg->callid->body;
+
+    LM_DBG("callid: %.*s\n", call_id->len, call_id->s);
 
     return 0;
 }
@@ -69,6 +71,43 @@ int get_msg_body(struct sip_msg *msg, str *body) {
     if (body->len != get_content_length(msg)) {
         WARN("Content length header value different than body size\n");
     }
+
+    return 0;
+}
+
+int str_to_char(str *value, char **new_value) {
+    int success;
+
+    success = asprintf(
+            new_value,
+            "%.*s",
+            value->len, value->s
+    );
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int copy_str(str *value, char **new_value, str **copy) {
+
+    if (str_to_char(value, new_value) == -1) {
+        ERR("cannot allocate memory.\n");
+        return -1;
+    }
+
+    *copy = (str *) pkg_malloc(sizeof(str));
+
+    if (*copy == NULL) {
+        ERR("cannot allocate pkg memory");
+        return -1;
+    }
+
+    (*copy)->s = *new_value;
+    (*copy)->len = strlen(*new_value);
 
     return 0;
 }

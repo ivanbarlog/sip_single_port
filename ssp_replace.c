@@ -47,7 +47,7 @@ static int ssp_set_body(struct sip_msg *msg, str *nb) {
         /* need to add Content-Length */
         len = nb->len;
         value_s = int2str(len, &value_len);
-        DBG("content-length: %d (%s)\n", value_len, value_s);
+        LM_DBG("content-length: %d (%s)\n", value_len, value_s);
 
         len = CONTENT_LENGTH_LEN + value_len + CRLF_LEN;
         buf = pkg_malloc(sizeof(char) * (len));
@@ -86,7 +86,7 @@ static int ssp_set_body(struct sip_msg *msg, str *nb) {
         return -1;
     }
 
-    DBG("new body: [%.*s]", nb->len, nb->s);
+    LM_DBG("new body: [%.*s]", nb->len, nb->s);
     return 1;
 }
 

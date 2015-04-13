@@ -17,40 +17,35 @@ static int has_request_and_response_endpoints(connection_t *connection) {
     return 0;
 }
 
-int create_connection(str call_id, connection_t *connection) {
-    connection = NULL;
+connection_t *create_connection(str call_id) {
+    connection_t *connection;
     connection = pkg_malloc(sizeof(connection_t));
 
     if (connection == NULL) {
         ERR("cannot allocate pkg memory");
-        return -1;
+        return NULL;
     }
 
-    connection->call_id = (str *) pkg_malloc(sizeof(char) * call_id.len);
 
-    if (&(connection->call_id) == NULL) {
-        ERR("cannot allocate pkg memory");
-        return -1;
+    if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
+        ERR("cannot allocate memory.\n");
+        return NULL;
     }
-
-    connection->call_id->s = call_id.s;
-    connection->call_id->len = call_id.len;
 
     connection->next = NULL;
     connection->prev = NULL;
     connection->request_endpoint = NULL;
     connection->response_endpoint = NULL;
+    connection->request_endpoint_ip = NULL;
+    connection->response_endpoint_ip = NULL;
 
-    return 0;
+    return connection;
 }
 
 int push_connection(connection_t *connection) {
     int ctr = 1;
     connection_t *tmp;
     tmp = connection;
-
-    tmp->prev = NULL;
-    tmp->next = NULL;
 
     /**
      * If connections wasn't initialized yet
@@ -93,8 +88,8 @@ char *print_connection(connection_t *connection) {
             &connection_info,
             "Call-ID: %.*s\nRequest IP: %s\nResponse IP: %s\n",
             connection->call_id->len, connection->call_id->s,
-            connection->request_endpoint_ip ? connection->request_endpoint_ip : "none",
-            connection->response_endpoint_ip ? connection->response_endpoint_ip : "none"
+            connection->request_endpoint_ip != NULL ? connection->request_endpoint_ip : "none",
+            connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none"
     );
 
     if (success == -1) {
@@ -122,23 +117,24 @@ char *print_connection(connection_t *connection) {
 }
 
 char *print_connections_list() {
+
+    if (connections == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return NULL;
+    }
+
     char *result = 0;
-    char *placeholder;
     int success;
 
     connection_t *current;
     current = connections;
 
+    result = print_connection(current);
     while (current->next != NULL) {
-        /**
-         * move placeholder to the end of result string
-         */
-        placeholder = result + strlen(result);
-
         success = asprintf(
-                &placeholder,
-                "%s",
-                print_connection(current)
+                &result,
+                "%s%s",
+                result, print_connection(current->next)
         );
 
         if (success == -1) {
@@ -152,8 +148,8 @@ char *print_connections_list() {
     return result;
 }
 
-int find_connection_by_call_id(str call_id, connection_t *connection) {
-    connection = NULL;
+int find_connection_by_call_id(str call_id, connection_t **connection) {
+    *connection = NULL;
 
     if (connections == NULL) {
         ERR("connections list is not initialized yet\n");
@@ -163,9 +159,9 @@ int find_connection_by_call_id(str call_id, connection_t *connection) {
     connection_t *current;
     current = connections;
 
-    while (current->next != NULL) {
+    while (current != NULL) {
         if (STR_EQ(*(current->call_id), call_id) == 1) {
-            connection = current;
+            *connection = current;
             return 0;
         }
 
@@ -176,8 +172,8 @@ int find_connection_by_call_id(str call_id, connection_t *connection) {
     return -1;
 }
 
-int find_counter_endpoint_by_ip(const char *ip, endpoint_t *endpoint) {
-    endpoint = NULL;
+int find_counter_endpoint_by_ip(const char *ip, endpoint_t **endpoint) {
+    *endpoint = NULL;
 
     if (connections == NULL) {
         ERR("connections list is not initialized yet\n");
@@ -187,18 +183,18 @@ int find_counter_endpoint_by_ip(const char *ip, endpoint_t *endpoint) {
     connection_t *current;
     current = connections;
 
-    while (current->next != NULL) {
+    while (current != NULL) {
         /*
          * Connection must have both request and response endpoints
          */
         if (has_request_and_response_endpoints(current) == 0) {
             if (strcmp(current->request_endpoint->ip, ip) == 0) {
-                endpoint = current->response_endpoint;
+                *endpoint = current->response_endpoint;
                 return 0;
             }
 
             if (strcmp(current->response_endpoint->ip, ip) == 0) {
-                endpoint = current->request_endpoint;
+                *endpoint = current->request_endpoint;
                 return 0;
             }
         }
@@ -215,7 +211,7 @@ int remove_connection(str call_id) {
     connection_t *next;
     connection_t *connection = NULL;
 
-    if (find_connection_by_call_id(call_id, connection) == 0) {
+    if (find_connection_by_call_id(call_id, &connection) == 0) {
         prev = connection->prev;
         next = connection->next;
 

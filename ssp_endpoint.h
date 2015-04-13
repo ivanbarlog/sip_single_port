@@ -37,7 +37,7 @@ typedef struct endpoint {
  * Returns 0 on success, -1 otherwise
  * If parsing fails endpoint is set to NULL
  */
-int parse_endpoint(sip_msg_t *msg, endpoint_t *endpoint);
+endpoint_t *parse_endpoint(sip_msg_t *msg);
 
 /**
  * Returns string containing formatted endpoint structure
