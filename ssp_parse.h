@@ -24,8 +24,9 @@ int terminates_dialog(sip_msg_t *msg);
 /**
  * Checks if SIP message cancells dialog
  * eg.
- * if it is SIP request with method CANCEL
- * or SIP response with ~600 code and INVITE method in Cseq
+ * if it is SIP request with method CANCEL (when caller cancels call)
+ * or SIP response with ~600 code and INVITE method in Cseq (when callee declines call)
+ * or SIP response with ~200 code and CANCEL method in Cseq (when request times out and is terminated)
  */
 int cancells_dialog(sip_msg_t *msg);
 
