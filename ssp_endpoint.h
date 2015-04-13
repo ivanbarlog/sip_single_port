@@ -24,11 +24,10 @@
 typedef struct endpoint {
     char *ip;
 
-    /* usable in UDP socket communication */
-    struct sockaddr_in ip_address;
-
     /* list of all media streams */
     struct endpoint_stream *streams;
+
+    struct endpoint *sibling;
 
 } endpoint_t;
 

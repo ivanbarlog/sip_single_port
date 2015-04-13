@@ -42,11 +42,9 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
             }
 
             if (head == NULL) {
-                LM_DBG("RRR:\nfirst element of streams\n");
                 head = tmp;
                 current = head;
             } else {
-                LM_DBG("RRR:\nanother element of streams\n");
                 current->next = tmp;
                 current = current->next;
             }
@@ -161,7 +159,7 @@ int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) 
     endpoint_stream_t *current;
     current = streams;
 
-    while (current->next != NULL) {
+    while (current != NULL) {
         if (STR_EQ(*(current->media), type)) {
             success = asprintf(&str_port, "%.*s", current->port->len, current->port->s);
 

@@ -29,7 +29,7 @@ msg_type get_msg_type(sip_msg_t *msg);
 /**
  * Returns sockaddr structure from specified IP and port
  */
-int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *ip);
+int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in **tmp);
 
 /**
  * Parses Call-ID from message

@@ -130,7 +130,6 @@ int msg_received(void *data) {
 
     str call_id;
     int msg_type = get_msg_type(&msg);
-    int success;
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
@@ -163,6 +162,7 @@ int msg_received(void *data) {
                     }
                 }
 
+                int success;
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
                     connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
 
@@ -227,7 +227,6 @@ int msg_received(void *data) {
             struct receive_info *ri;
             char *src_ip;
             unsigned short src_port, dst_port;
-            struct sockaddr_in *dst_ip = NULL;
             int success;
 
             ri = (struct receive_info *) d[2];
@@ -246,29 +245,34 @@ int msg_received(void *data) {
                 goto done;
             }
 
-            endpoint_t *endpoint = NULL;
-            if (find_counter_endpoint_by_ip(src_ip, &endpoint) != 0) {
+            endpoint_t *dst_endpoint = NULL;
+            if (find_counter_endpoint_by_ip(src_ip, &dst_endpoint) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }
 
+            endpoint_t *src_endpoint = dst_endpoint->sibling;
+
             str *type = NULL;
-            if (get_stream_type(endpoint->streams, src_port, &type) == -1) {
+            if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
                 ERR("Cannot find stream with port '%d'\n", src_port);
                 goto done;
             }
 
-            if (get_stream_port(endpoint->streams, *type, &dst_port) == -1) {
+            if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
                 ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
                 goto done;
             }
 
-            if (get_socket_addr(endpoint->ip, dst_port, dst_ip) == -1) {
+            struct sockaddr_in *dst_ip = NULL;
+            if (get_socket_addr(dst_endpoint->ip, dst_port, &dst_ip) == -1) {
                 ERR("Cannot instantiate socket address\n");
                 goto done;
             }
 
-            send_packet_to_endpoint(obuf, *dst_ip);
+            if (send_packet_to_endpoint(obuf, *dst_ip) == 0) {
+                INFO("RTP packet sent successfully!\n");
+            }
 
             break;
         default:

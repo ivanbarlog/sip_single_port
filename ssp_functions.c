@@ -23,18 +23,20 @@ msg_type get_msg_type(sip_msg_t *msg) {
 }
 
 
-int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *ip) {
-    ip = pkg_malloc(sizeof(struct sockaddr_in));
+int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in **ip) {
+    struct sockaddr_in *tmp = pkg_malloc(sizeof(struct sockaddr_in));
 
-    if (ip == NULL) {
+    if (tmp == NULL) {
         ERR("cannot allocate pkg memory\n");
         return -1;
     }
 
-    memset((char *) &ip, 0, sizeof(struct sockaddr_in));
-    ip->sin_family = AF_INET;
-    ip->sin_addr.s_addr = inet_addr(endpoint_ip);
-    ip->sin_port = htons(port);
+    memset((void *) tmp, 0, (size_t)sizeof(*tmp));
+    tmp->sin_family = AF_INET;
+    tmp->sin_addr.s_addr = inet_addr(endpoint_ip);
+    tmp->sin_port = htons(port);
+
+    *ip = tmp;
 
     return 0;
 }
@@ -51,8 +53,6 @@ int parse_call_id(sip_msg_t *msg, str *call_id) {
     }
 
     *call_id = msg->callid->body;
-
-    LM_DBG("callid: %.*s\n", call_id->len, call_id->s);
 
     return 0;
 }

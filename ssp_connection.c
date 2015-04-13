@@ -190,11 +190,19 @@ int find_counter_endpoint_by_ip(const char *ip, endpoint_t **endpoint) {
         if (has_request_and_response_endpoints(current) == 0) {
             if (strcmp(current->request_endpoint->ip, ip) == 0) {
                 *endpoint = current->response_endpoint;
+                if (current->response_endpoint->sibling == NULL) {
+                    current->response_endpoint->sibling = current->request_endpoint;
+                }
+
                 return 0;
             }
 
             if (strcmp(current->response_endpoint->ip, ip) == 0) {
                 *endpoint = current->request_endpoint;
+                if (current->request_endpoint->sibling == NULL) {
+                    current->request_endpoint->sibling = current->response_endpoint;
+                }
+
                 return 0;
             }
         }
