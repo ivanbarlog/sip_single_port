@@ -2,7 +2,6 @@
 
 int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
     endpoint_stream_t *current;
-    current = *streams;
 
     sdp_session_cell_t *sec;
     sec = sdp_info->sessions;
@@ -18,12 +17,13 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
                 return -1;
             }
 
-            LM_DBG(
-                    "ZZZ:\n%.*s\n%.*s\n%.*s\n",
-                    stc->media.len, stc->media.s,
-                    stc->port.len, stc->port.s,
-                    stc->rtcp_port.len, stc->rtcp_port.s
-            );
+            tmp->media = NULL;
+            tmp->media_raw = NULL;
+            tmp->port = NULL;
+            tmp->port_raw = NULL;
+            tmp->rtcp_port = NULL;
+            tmp->rtcp_port_raw = NULL;
+            tmp->next = NULL;
 
             if (copy_str(&(stc->media), &(tmp->media_raw), &(tmp->media)) == -1) {
                 ERR("cannot allocate memory.\n");
@@ -35,19 +35,16 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
                 return -1;
             }
 
-            if (copy_str(&(stc->rtcp_port), &(tmp->rtp_port_raw), &(tmp->rtcp_port)) == -1) {
+            if (copy_str(&(stc->rtcp_port), &(tmp->rtcp_port_raw), &(tmp->rtcp_port)) == -1) {
                 ERR("cannot allocate memory.\n");
                 return -1;
             }
 
-//            tmp->media = stc->media;
-//            tmp->port = stc->port;
-//            tmp->rtcp_port = stc->rtcp_port;
-            tmp->next = NULL;
-
             if (current == NULL) {
+                LM_DBG("RRR:\nfirst element of streams\n");
                 current = tmp;
             } else {
+                LM_DBG("RRR:\nanother element of streams\n");
                 current->next = tmp;
                 current = current->next;
             }
@@ -58,6 +55,8 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
         sec = sec->next;
     }
 
+    *streams = current;
+
     return 0;
 }
 
@@ -67,10 +66,10 @@ char *print_stream(endpoint_stream_t *stream) {
 
     success = asprintf(
             &result,
-            "Media: %.*s\nRTP: %.*s\nRTCP: %.*s\n",
-            stream->media->len, stream->media->s,
-            stream->port->len, stream->port->s,
-            stream->rtcp_port->len, stream->rtcp_port->s
+            "#\nMedia: %s\nRTP: %s\nRTCP: %s\n",
+            stream->media_raw != NULL ? stream->media_raw : "none",
+            stream->port_raw != NULL ? stream->port_raw : "none",
+            stream->rtcp_port_raw != NULL ? stream->rtcp_port_raw : "none"
     );
 
     if (success == -1) {
@@ -88,23 +87,18 @@ char *print_endpoint_streams(endpoint_stream_t **streams) {
         return NULL;
     }
 
-    LM_DBG("XXX:\nstreams not empty\n");
-
-    char *result;
-    int success = 0;
+    char *result = 0;
+    int success;
 
     endpoint_stream_t *current;
     current = *streams;
 
     result = print_stream(current);
-
-    LM_DBG("XXX:\n%s\n", result);
-
     while (current->next != NULL) {
         success = asprintf(
                 &result,
                 "%s%s",
-                result, print_stream(current)
+                result, print_stream(current->next)
         );
 
         if (success == -1) {

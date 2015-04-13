@@ -70,7 +70,7 @@ char *print_endpoint(endpoint_t *endpoint) {
 
     success = asprintf(
             &result,
-            "Endpoint:\n\t%s\n\tStreams:\n\t%s\n\n",
+            "Endpoint:\n%s\n###\nStreams:\n%s\n",
             endpoint_info, streams_info
     );
 

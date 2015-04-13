@@ -102,7 +102,7 @@ char *print_connection(connection_t *connection) {
 
     success = asprintf(
             &result,
-            "Connection:\n\t%s\nRequest endpoint:\n\t%s\nResponse endpoint:\n\t%s\n\n",
+            "##########\nConnection:\n%s\n#####\nRequest endpoint:\n%s\n#####\nResponse endpoint:\n%s\n\n",
             connection_info,
             request_endpoint_info,
             response_endpoint_info

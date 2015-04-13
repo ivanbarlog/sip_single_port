@@ -130,6 +130,7 @@ int msg_received(void *data) {
 
     str call_id;
     int msg_type = get_msg_type(&msg);
+    int success;
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
@@ -139,8 +140,6 @@ int msg_received(void *data) {
                     ERR("Cannot parse Call-ID\n");
                     goto done;
                 }
-
-                LM_DBG("call-id: %.*s\n", call_id.len, call_id.s);
 
                 endpoint_t *endpoint;
                 endpoint = parse_endpoint(&msg);
@@ -152,7 +151,6 @@ int msg_received(void *data) {
                 connection_t *connection = NULL;
                 if (find_connection_by_call_id(call_id, &connection) == -1) {
 
-                    LM_DBG("FFF\nCreating connection with callid: [%.*s]\n", call_id.len, call_id.s);
                     connection = create_connection(call_id);
                     if (connection == NULL) {
                         ERR("Cannot create connection.\n");
@@ -165,25 +163,22 @@ int msg_received(void *data) {
                     }
                 }
 
-                if (connection == NULL) {
-                    LM_ERR("ZZZ:\nshit happened\n");
-                } else {
-                    LM_DBG("ZZZ:\nconnection is not null yohooo\n");
-                }
-
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
                     connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
 
                     connection->request_endpoint = endpoint;
 
-                    asprintf(
+                    success = asprintf(
                             &(connection->request_endpoint_ip),
                             "%s",
                             endpoint->ip
                     );
 
-//                    connection->request_endpoint = endpoint;
-//                    connection->request_endpoint_ip = endpoint->ip;
+                    if (success == -1) {
+                        ERR("asprintf failed to allocate memory\n");
+                        goto done;
+                    }
+
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
@@ -191,14 +186,16 @@ int msg_received(void *data) {
 
                     connection->response_endpoint = endpoint;
 
-                    asprintf(
+                    success = asprintf(
                             &(connection->response_endpoint_ip),
                             "%s",
                             endpoint->ip
                     );
 
-//                    connection->response_endpoint = endpoint;
-//                    connection->response_endpoint_ip = endpoint->ip;
+                    if (success == -1) {
+                        ERR("asprintf failed to allocate memory\n");
+                        goto done;
+                    }
                 }
             }
 

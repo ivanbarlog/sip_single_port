@@ -27,7 +27,7 @@ typedef struct endpoint_stream {
     str *media;
     char *port_raw;
     str *port;
-    char *rtp_port_raw;
+    char *rtcp_port_raw;
     str *rtcp_port;
 
     struct endpoint_stream *next;
