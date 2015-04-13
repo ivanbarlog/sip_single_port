@@ -1,7 +1,8 @@
 #include "ssp_stream.h"
 
 int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
-    endpoint_stream_t *current;
+    endpoint_stream_t *head = NULL;
+    endpoint_stream_t *current = NULL;
 
     sdp_session_cell_t *sec;
     sec = sdp_info->sessions;
@@ -40,9 +41,10 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
                 return -1;
             }
 
-            if (current == NULL) {
+            if (head == NULL) {
                 LM_DBG("RRR:\nfirst element of streams\n");
-                current = tmp;
+                head = tmp;
+                current = head;
             } else {
                 LM_DBG("RRR:\nanother element of streams\n");
                 current->next = tmp;
@@ -55,7 +57,7 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
         sec = sec->next;
     }
 
-    *streams = current;
+    *streams = head;
 
     return 0;
 }
@@ -80,9 +82,9 @@ char *print_stream(endpoint_stream_t *stream) {
     return result;
 }
 
-char *print_endpoint_streams(endpoint_stream_t **streams) {
+char *print_endpoint_streams(endpoint_stream_t *streams) {
 
-    if (*streams == NULL) {
+    if (streams == NULL) {
         ERR("streams list is not initialized\n");
         return NULL;
     }
@@ -91,7 +93,7 @@ char *print_endpoint_streams(endpoint_stream_t **streams) {
     int success;
 
     endpoint_stream_t *current;
-    current = *streams;
+    current = streams;
 
     result = print_stream(current);
     while (current->next != NULL) {

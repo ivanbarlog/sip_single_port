@@ -66,7 +66,7 @@ char *print_endpoint(endpoint_t *endpoint) {
         return NULL;
     }
 
-    streams_info = print_endpoint_streams(&endpoint->streams);
+    streams_info = print_endpoint_streams(endpoint->streams);
 
     success = asprintf(
             &result,

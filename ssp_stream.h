@@ -67,7 +67,7 @@ char *print_stream(endpoint_stream_t *stream);
  * Traverses all endpoint streams and returns printable string
  * Internally uses print_stream function
  */
-char *print_endpoint_streams(endpoint_stream_t **streams);
+char *print_endpoint_streams(endpoint_stream_t *streams);
 
 /**
  * Returns stream type by specified port
