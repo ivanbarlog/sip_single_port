@@ -22,6 +22,14 @@ int initializes_dialog(sip_msg_t *msg);
 int terminates_dialog(sip_msg_t *msg);
 
 /**
+ * Checks if SIP message cancells dialog
+ * eg.
+ * if it is SIP request with method CANCEL
+ * or SIP response with ~600 code and INVITE method in Cseq
+ */
+int cancells_dialog(sip_msg_t *msg);
+
+/**
  * Parses connection structure with endpoint structures
  * from SIP request or SIP response
  */

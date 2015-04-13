@@ -199,6 +199,15 @@ int msg_received(void *data) {
                 }
             }
 
+            if (cancells_dialog(&msg) == 0) {
+                if (parse_call_id(&msg, &call_id) == -1) {
+                    ERR("Cannot parse Call-ID\n");
+                    goto done;
+                }
+
+                remove_connection(call_id);
+            }
+
             if (terminates_dialog(&msg) == 0) {
                 if (parse_call_id(&msg, &call_id) == -1) {
                     ERR("Cannot parse Call-ID\n");
