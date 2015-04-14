@@ -10,28 +10,24 @@
 
 <book xmlns:xi="http://www.w3.org/2001/XInclude">
     <bookinfo>
-	<title>topoh Module</title>
+	<title>sip_single_port Module</title>
 	<productname class="trade">sip-router.org</productname>
 	<authorgroup>
 	    <author>
-		<firstname>Daniel-Constantin</firstname>
-		<surname>Mierla</surname>
-		<email>miconda@gmail.com</email>
+		<firstname>Ivan</firstname>
+		<surname>Barlog</surname>
+		<email>ivan.barlog@gmail.com</email>
 	    </author>
 	    <editor>
-		<firstname>Daniel-Constantin</firstname>
-		<surname>Mierla</surname>
-		<email>miconda@gmail.com</email>
+		<firstname>Ivan</firstname>
+		<surname>Barlog</surname>
+		<email>ivan.barlog@gmail.com</email>
 	    </editor>
 	</authorgroup>
 	<copyright>
-	    <year>2009</year>
-	    <holder>&fhg;</holder>
+	    <year>2015</year>
+	    <holder></holder>
 	</copyright>
     </bookinfo>
     <toc></toc>
-    
-    <xi:include href="topoh_admin.xml"/>
-    
-    
 </book>
