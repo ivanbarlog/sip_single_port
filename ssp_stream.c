@@ -1,6 +1,7 @@
 #include "ssp_stream.h"
 
-int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
+int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
+    sdp_info_t *sdp_info = (sdp_info_t *) msg->body;
     endpoint_stream_t *head = NULL;
     endpoint_stream_t *current = NULL;
 
@@ -36,6 +37,15 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
                 return -1;
             }
 
+            //todo: change this in msg not stc...
+            if (&(stc->rtcp_port) == NULL) {
+                unsigned int rtp;
+                str2int(&(stc->port), &rtp);
+
+                stc->rtcp_port.s = int2str(rtp + 1, &(stc->rtcp_port.len));
+            }
+            //todo end
+
             if (copy_str(&(stc->rtcp_port), &(tmp->rtcp_port_raw), &(tmp->rtcp_port)) == -1) {
                 ERR("cannot allocate memory.\n");
                 return -1;
@@ -56,6 +66,9 @@ int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams) {
     }
 
     *streams = head;
+
+    LM_DBG("NEW BODY: %.*s\n", sdp_info->raw_sdp.len, sdp_info->raw_sdp.s);
+    ssp_set_body(msg, &(sdp_info->raw_sdp));
 
     return 0;
 }

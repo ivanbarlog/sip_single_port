@@ -13,6 +13,7 @@
 
 #include "ssp_endpoint.h"
 #include "ssp_functions.h"
+#include "ssp_replace.h"
 
 
 /**
@@ -42,7 +43,7 @@ typedef struct endpoint_stream {
  * Returns 0 on success, -1 otherwise
  * If parsing fails streams is set to NULL
  */
-int parse_streams(sdp_info_t *sdp_info, endpoint_stream_t **streams);
+int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams);
 
 /**
  * Returns socket address from streams list (provided by endpoint)

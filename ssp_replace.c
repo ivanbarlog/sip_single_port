@@ -1,10 +1,11 @@
 #include "ssp_replace.h"
+#include "../../parser/sdp/sdp.h"
 
 /**
  * Removes old body from SIP message and sets
  * the new one provided in argument.
  */
-static int ssp_set_body(struct sip_msg *msg, str *nb) {
+int ssp_set_body(struct sip_msg *msg, str *nb) {
     struct lump *anchor;
     char *buf;
     int len;

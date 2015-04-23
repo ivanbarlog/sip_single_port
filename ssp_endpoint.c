@@ -39,7 +39,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
 
     endpoint->sibling = NULL;
     endpoint->streams = NULL;
-    parse_streams((sdp_info_t *) msg->body, &endpoint->streams);
+    parse_streams(msg, &endpoint->streams);
 
     parse_creator_ip(msg, &endpoint->ip);
 

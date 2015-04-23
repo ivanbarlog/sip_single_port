@@ -48,4 +48,7 @@ int change_media_ports(sip_msg_t *msg, str host_port);
  */
 int skip_media_changes(sip_msg_t *msg);
 
+
+int ssp_set_body(struct sip_msg *msg, str *nb);
+
 #endif //KAMAILIO_SSP_REPLACE_H
