@@ -82,5 +82,8 @@ int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type)
  */
 int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port);
 
+int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, str **type);
+
+int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *port);
 
 #endif //KAMAILIO_SSP_STREAM_H

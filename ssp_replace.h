@@ -15,6 +15,7 @@
 #include "../../config.h"
 #include "../../parser/parse_fline.h"
 #include "../../parser/parse_cseq.h"
+#include "../../parser/sdp/sdp.h"
 
 #include "ssp_functions.h"
 
@@ -22,16 +23,6 @@
  * Updates SIP message before it is sent by Kamailio
  */
 char *update_msg(sip_msg_t *msg, unsigned int *len);
-
-/**
- * Adds RTCP directive to body (as a body_lump) if not present
- * Port is calculated based on RTP port
- *
- * Returns 0 on success, -1 otherwise
- *
- * todo: should be called within ssp_set_body()
- */
-int add_rtcp_field(sip_msg_t *msg, unsigned short rtp_port);
 
 /**
  * Changes all media attributes (RTP ports) and RTCP ports in SDP
@@ -48,7 +39,9 @@ int change_media_ports(sip_msg_t *msg, str host_port);
  */
 int skip_media_changes(sip_msg_t *msg);
 
-
+/**
+ * Removes old body from msg and replaces it with nb (new body)
+ */
 int ssp_set_body(struct sip_msg *msg, str *nb);
 
 #endif //KAMAILIO_SSP_REPLACE_H

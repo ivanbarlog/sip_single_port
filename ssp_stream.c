@@ -37,15 +37,6 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
                 return -1;
             }
 
-            //todo: change this in msg not stc...
-            if (&(stc->rtcp_port) == NULL) {
-                unsigned int rtp;
-                str2int(&(stc->port), &rtp);
-
-                stc->rtcp_port.s = int2str(rtp + 1, &(stc->rtcp_port.len));
-            }
-            //todo end
-
             if (copy_str(&(stc->rtcp_port), &(tmp->rtcp_port_raw), &(tmp->rtcp_port)) == -1) {
                 ERR("cannot allocate memory.\n");
                 return -1;
@@ -182,6 +173,65 @@ int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) 
             }
 
             *port = (unsigned int)atoi(str_port);
+
+            return 0;
+        }
+
+        current = current->next;
+    }
+
+    INFO("Cannot find stream with type '%.*s'\n", type.len, type.s);
+    return -1;
+}
+
+int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, str **type) {
+    char * str_port;
+    unsigned int rtp_port;
+    int success;
+
+    endpoint_stream_t *current;
+    current = streams;
+
+    while (current != NULL) {
+        success = asprintf(&str_port, "%.*s", current->port->len, current->port->s);
+
+        if (success == -1) {
+            ERR("asprintf failed to allocate memory\n");
+            return -1;
+        }
+
+        rtp_port = (unsigned int)atoi(str_port);
+
+        if (rtp_port == src_port) {
+            *type = current->media;
+
+            return 0;
+        }
+
+        current = current->next;
+    }
+
+    INFO("Cannot find stream with port '%d'\n", src_port);
+    return -1;
+}
+
+int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *port) {
+    char tmp;
+    unsigned int rtcp_port;
+    int success;
+
+    endpoint_stream_t *current;
+    current = streams;
+
+    while (current != NULL) {
+        if (STR_EQ(*(current->media), type)) {
+            success = sscanf(current->rtcp_port_raw, "%u %s", &rtcp_port, &tmp);
+
+            if (success == EOF) {
+                *port = (unsigned int)atoi(current->port_raw) + 1;
+            }
+
+            *port = rtcp_port;
 
             return 0;
         }

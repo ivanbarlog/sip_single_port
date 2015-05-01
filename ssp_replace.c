@@ -1,5 +1,4 @@
 #include "ssp_replace.h"
-#include "../../parser/sdp/sdp.h"
 
 /**
  * Removes old body from SIP message and sets
@@ -113,8 +112,8 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
     int success;
 
     char *pattern;
-    // if stream is set to 0 we don't want to change it so we will skip all ports < 10
-    success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})/\\1%s/g", (char *) host_port.s);
+
+    success = asprintf(&pattern, "/(a=rtcp: *)([[:digit:]]{0,5}.*)\r\n/\\1%s\r\n/g", (char *) host_port.s);
 
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");
@@ -123,17 +122,6 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
 
     str *subst;
     subst = (str *) pkg_malloc(sizeof(str));
-    subst->s = pattern;
-    subst->len = strlen(pattern);
-
-    seMedia = subst_parser(subst);
-
-    success = asprintf(&pattern, "/(a=rtcp: *)([[:digit:]]{0,5})/\\1%s/g", (char *) host_port.s);
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return -1;
-    }
 
     subst->s = pattern;
     subst->len = strlen(pattern);
@@ -143,32 +131,32 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
     str *newBody, *tmpBody;
     char const *oldBody = (char const *) sdp.s;
 
-    newBody = subst_str(oldBody, msg, seMedia, &count);
+    tmpBody = subst_str(oldBody, msg, seRtcp, &count);
 
     if (count > 0) {
+        // if stream is set to 0 we don't want to change it so we will skip all ports < 10
+        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})/\\1%s/g", (char *) host_port.s);
+
         count = 0;
-        oldBody = (char const *) newBody->s;
-        tmpBody = subst_str(oldBody, msg, seRtcp, &count);
-
-        if (count > 0) {
-            newBody->s = tmpBody->s;
-            newBody->len = tmpBody->len;
-        } else {
-            /* todo: if RTCP is not present
-             * we need to add it and set it to 5060
-             * because if it is not present it is automatically
-             * determined to next odd port which is 5061
-             *
-             * also we need to mark this somewhere in endpoint structure
-             */
-        }
-
-        ssp_set_body(msg, newBody);
-
-        return 0;
+        oldBody = (char const *) tmpBody->s;
+    } else {
+        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})(.*\r\n)/\\1%s\\3a=rtcp:%s\r\n/g", (char *) host_port.s, (char *) host_port.s);
     }
 
-    return -1;
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return -1;
+    }
+
+    subst->s = pattern;
+    subst->len = strlen(pattern);
+    seMedia = subst_parser(subst);
+
+    newBody = subst_str(oldBody, msg, seMedia, &count);
+
+    ssp_set_body(msg, newBody);
+
+    return 0;
 }
 
 int skip_media_changes(sip_msg_t *msg) {

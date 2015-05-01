@@ -13,6 +13,8 @@ msg_type get_msg_type(sip_msg_t *msg) {
 
         //if 6th and 5th bit is "10" it's RTCP else RTP
         if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0) {
+            LM_DBG("RTCP mother fucker!\n");
+
             return SSP_RTCP_PACKET;
         } else {
             return SSP_RTP_PACKET;
