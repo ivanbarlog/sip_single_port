@@ -1,4 +1,5 @@
 #include "ssp_replace.h"
+#include "../../ip_addr.h"
 
 /**
  * Removes old body from SIP message and sets
@@ -99,7 +100,7 @@ char *update_msg(sip_msg_t *msg, unsigned int *len) {
     return build_req_buf_from_sip_req(msg, len, &dst, BUILD_NO_LOCAL_VIA | BUILD_NO_VIA1_UPDATE);
 }
 
-int change_media_ports(sip_msg_t *msg, str host_port) {
+int change_media_ports(sip_msg_t *msg, struct socket_info *bind_address) {
     str sdp = {0, 0};
     if (get_msg_body(msg, &sdp) != 0) {
         ERR("Cannot parse SDP.");
@@ -107,41 +108,72 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
     }
 
     struct subst_expr
+            *seCreator,
             *seMedia,
             *seRtcp;
     int success;
-
     char *pattern;
+    str *subst;
 
-    success = asprintf(&pattern, "/(a=rtcp: *)([[:digit:]]{0,5}.*)\r\n/\\1%s\r\n/g", (char *) host_port.s);
+    int count = 0;
+    str *newBody, *tmpBody, *cBody;
+    char const *oldBody = (char const *) sdp.s;
+
+    /**
+     * Replace Creator IP address
+     */
+    success = asprintf(&pattern, "/(c=)(.*)\r\n/\\1%s %.*s\r\n/g",
+                       bind_address->address.af == AF_INET6 ? "IN IP6" : "IN IP4",
+                       bind_address->address_str.len, bind_address->address_str.s);
 
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");
         return -1;
     }
 
-    str *subst;
     subst = (str *) pkg_malloc(sizeof(str));
+
+    subst->s = pattern;
+    subst->len = strlen(pattern);
+    seCreator = subst_parser(subst);
+
+    cBody = subst_str(oldBody, msg, seCreator, &count);
+
+    if (count > 0) {
+        count = 0;
+        oldBody = (char const *) cBody->s;
+    }
+
+    /**
+     * Replace RTCP ports
+     */
+    success = asprintf(&pattern, "/(a=rtcp: *)([[:digit:]]{0,5}.*)\r\n/\\1%s\r\n/g",
+                       (char *) bind_address->port_no_str.s);
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return -1;
+    }
 
     subst->s = pattern;
     subst->len = strlen(pattern);
     seRtcp = subst_parser(subst);
 
-    int count = 0;
-    str *newBody, *tmpBody;
-    char const *oldBody = (char const *) sdp.s;
-
     tmpBody = subst_str(oldBody, msg, seRtcp, &count);
 
+    /**
+     * Replace RTP ports (if RTCP ports was not found we append them to media attributes)
+     */
     if (count > 0) {
         // if stream is set to 0 we don't want to change it so we will skip all ports < 10
-        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})/\\1%s/g", (char *) host_port.s);
+        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})/\\1%s/g",
+                           (char *) bind_address->port_no_str.s);
 
         count = 0;
         oldBody = (char const *) tmpBody->s;
     } else {
         success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})(.*\r\n)/\\1%s\\3a=rtcp:%s\r\n/g",
-                           (char *) host_port.s, (char *) host_port.s);
+                           (char *) bind_address->port_no_str.s, (char *) bind_address->port_no_str.s);
     }
 
     if (success == -1) {

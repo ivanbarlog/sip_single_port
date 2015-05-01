@@ -306,7 +306,7 @@ int msg_sent(void *data) {
         goto done;
     }
 
-    if (change_media_ports(&msg, bind_address->port_no_str) == 0) {
+    if (change_media_ports(&msg, bind_address) == 0) {
         obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
     }
 

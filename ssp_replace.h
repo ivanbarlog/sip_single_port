@@ -31,7 +31,7 @@ char *update_msg(sip_msg_t *msg, unsigned int *len);
  *
  * Returns 0 on success, -1 otherwise
  */
-int change_media_ports(sip_msg_t *msg, str host_port);
+int change_media_ports(sip_msg_t *msg, struct socket_info* bind_address);
 
 /**
  * Returns 1 if SIP message is INVITE request or ~200 OK response to INVITE,
