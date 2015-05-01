@@ -46,9 +46,13 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     return endpoint;
 }
 
-char *print_endpoint(endpoint_t *endpoint) {
+static char *get_hdr_line() {
+    return " +=========================================+";
+}
+
+char *print_endpoint(endpoint_t *endpoint, const char *label) {
     if (endpoint == NULL) {
-        return NULL;
+        return "";
     }
 
     char *result;
@@ -58,8 +62,8 @@ char *print_endpoint(endpoint_t *endpoint) {
 
     success = asprintf(
             &endpoint_info,
-            "IP: %s\n",
-            endpoint->ip
+            "%s (%s)",
+            label, endpoint->ip
     );
 
     if (success == -1) {
@@ -71,8 +75,10 @@ char *print_endpoint(endpoint_t *endpoint) {
 
     success = asprintf(
             &result,
-            "Endpoint:\n%s\n###\nStreams:\n%s\n",
-            endpoint_info, streams_info
+            "%s\n | %-39s |\n%s\n",
+            get_hdr_line(),
+            endpoint_info,
+            streams_info
     );
 
     if (success == -1) {

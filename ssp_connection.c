@@ -77,6 +77,23 @@ int push_connection(connection_t *connection) {
     return ctr;
 }
 
+static char *get_hdr_line(int type) {
+    if (type == 0) {
+        return " +=========================================+";
+    }
+
+    return " +====================+====================+";
+
+}
+
+static char *get_line(int type) {
+    if (type == 0) {
+        return " +-----------------------------------------+";
+    }
+
+    return " +--------------------+--------------------+";
+}
+
 char *print_connection(connection_t *connection) {
     char *result;
     char *connection_info;
@@ -86,10 +103,18 @@ char *print_connection(connection_t *connection) {
 
     success = asprintf(
             &connection_info,
-            "Call-ID: %.*s\nRequest IP: %s\nResponse IP: %s\n",
+            "%s\n | %-39s |\n%s\n | %-39.*s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n",
+            get_hdr_line(0),
+            "Connection by Call-ID",
+            get_line(0),
             connection->call_id->len, connection->call_id->s,
+            get_hdr_line(1),
+            "Request IP",
+            "Response IP",
+            get_line(1),
             connection->request_endpoint_ip != NULL ? connection->request_endpoint_ip : "none",
-            connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none"
+            connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none",
+            get_line(1)
     );
 
     if (success == -1) {
@@ -97,12 +122,12 @@ char *print_connection(connection_t *connection) {
         return NULL;
     }
 
-    request_endpoint_info = print_endpoint(connection->request_endpoint);
-    response_endpoint_info = print_endpoint(connection->response_endpoint);
+    request_endpoint_info = print_endpoint(connection->request_endpoint, "Request endpoint");
+    response_endpoint_info = print_endpoint(connection->response_endpoint, "Response endpoint");
 
     success = asprintf(
             &result,
-            "##########\nConnection:\n%s\n#####\nRequest endpoint:\n%s\n#####\nResponse endpoint:\n%s\n\n",
+            "%s\n%s%s\n\n\n",
             connection_info,
             request_endpoint_info,
             response_endpoint_info
@@ -120,7 +145,7 @@ char *print_connections_list() {
 
     if (connections == NULL) {
         ERR("connections list is not initialized yet\n");
-        return NULL;
+        return "not initialized yet\n";
     }
 
     char *result = 0;

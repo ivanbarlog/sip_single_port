@@ -64,16 +64,25 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
     return 0;
 }
 
+static char *get_hdr_line() {
+    return " +==============+============+=============+";
+}
+
+static char *get_line() {
+    return " +--------------+------------+-------------+";
+}
+
 char *print_stream(endpoint_stream_t *stream) {
     char *result;
     int success;
 
     success = asprintf(
             &result,
-            "#\nMedia: %s\nRTP: %s\nRTCP: %s\n",
+            " | %-12s | %-10s | %-11s |\n%s\n",
             stream->media_raw != NULL ? stream->media_raw : "none",
             stream->port_raw != NULL ? stream->port_raw : "none",
-            stream->rtcp_port_raw != NULL ? stream->rtcp_port_raw : "none"
+            stream->rtcp_port_raw != NULL ? stream->rtcp_port_raw : "none",
+            get_line()
     );
 
     if (success == -1) {
@@ -88,7 +97,7 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
 
     if (streams == NULL) {
         ERR("streams list is not initialized\n");
-        return NULL;
+        return "";
     }
 
     char *result = 0;
@@ -97,7 +106,20 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
     endpoint_stream_t *current;
     current = streams;
 
-    result = print_stream(current);
+    success = asprintf(
+            &result,
+            "%s\n | %-12s | %-10s | %-11s |\n%s\n%s",
+            get_hdr_line(),
+            "Media type", "RTP port", "RTCP port",
+            get_line(),
+            print_stream(current)
+    );
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return NULL;
+    }
+
     while (current->next != NULL) {
         success = asprintf(
                 &result,

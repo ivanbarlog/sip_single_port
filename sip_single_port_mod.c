@@ -92,16 +92,13 @@ static int mod_init(void) {
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-    #ifdef USE_TCP
+#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
 
     return 0;
 }
 
-/**
- *
- */
 int msg_received(void *data) {
     void **d = (void **) data;
     void *d1 = d[0];
@@ -212,7 +209,7 @@ int msg_received(void *data) {
                 remove_connection(call_id);
             }
 
-            LM_DBG("\n\nCONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
 
             break;
         case SSP_RTP_PACKET: //no break

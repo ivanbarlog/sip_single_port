@@ -42,6 +42,6 @@ endpoint_t *parse_endpoint(sip_msg_t *msg);
  * Returns string containing formatted endpoint structure
  * which can be used with LM_* macros
  */
-char *print_endpoint(endpoint_t *endpoint);
+char *print_endpoint(endpoint_t *endpoint, const char *label);
 
 #endif //KAMAILIO_SSP_ENDPOINT_H
