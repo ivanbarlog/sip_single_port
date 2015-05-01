@@ -46,22 +46,9 @@ typedef struct endpoint_stream {
 int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams);
 
 /**
- * Returns socket address from streams list (provided by endpoint)
- * based on RTP or RTCP port
- *
- * Returns 0 on success, -1 otherwise
- * If stream is not found ip is set to NULL
- *
- * todo: not implemented yet - should be removed and replaced by get_stream_type() and get_stream_port()
- */
-int get_stream_ip(endpoint_stream_t *streams, unsigned short port, struct sockaddr_in *ip);
-
-/**
  * Returns string containing formatted endpoint_streams_t structure
  * which can be used with LM_* macros
- *
- * todo: should be static
- */
+  */
 char *print_stream(endpoint_stream_t *stream);
 
 /**

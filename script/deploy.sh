@@ -5,7 +5,7 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-HOST=${1-"172.16.97.1"}
+HOST=${1-"192.168.0.6"}
 
 killall kamailio
 rm -rf ./modules/sip_single_port/*

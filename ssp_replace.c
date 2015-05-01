@@ -47,7 +47,7 @@ int ssp_set_body(struct sip_msg *msg, str *nb) {
         /* need to add Content-Length */
         len = nb->len;
         value_s = int2str(len, &value_len);
-        LM_DBG("content-length: %d (%s)\n", value_len, value_s);
+                LM_DBG("content-length: %d (%s)\n", value_len, value_s);
 
         len = CONTENT_LENGTH_LEN + value_len + CRLF_LEN;
         buf = pkg_malloc(sizeof(char) * (len));
@@ -86,7 +86,7 @@ int ssp_set_body(struct sip_msg *msg, str *nb) {
         return -1;
     }
 
-    LM_DBG("new body: [%.*s]", nb->len, nb->s);
+            LM_DBG("new body: [%.*s]", nb->len, nb->s);
     return 1;
 }
 
@@ -140,7 +140,8 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
         count = 0;
         oldBody = (char const *) tmpBody->s;
     } else {
-        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})(.*\r\n)/\\1%s\\3a=rtcp:%s\r\n/g", (char *) host_port.s, (char *) host_port.s);
+        success = asprintf(&pattern, "/(m=[[:alpha:]]+ *)([[:digit:]]{2,5})(.*\r\n)/\\1%s\\3a=rtcp:%s\r\n/g",
+                           (char *) host_port.s, (char *) host_port.s);
     }
 
     if (success == -1) {
@@ -162,8 +163,7 @@ int change_media_ports(sip_msg_t *msg, str host_port) {
 int skip_media_changes(sip_msg_t *msg) {
     if (parse_msg(msg->buf, msg->len, msg) == 0) {
 
-        if (msg->first_line.type == SIP_REQUEST)
-        {
+        if (msg->first_line.type == SIP_REQUEST) {
             if (msg->REQ_METHOD == METHOD_INVITE) {
                 return 1;
             }

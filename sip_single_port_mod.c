@@ -44,6 +44,7 @@
 #include "../../sr_module.h"
 #include "../../events.h"
 #include "../../forward.h"
+#include "../../globals.h"
 
 #include "ssp_parse.h"
 #include "ssp_replace.h"
@@ -63,14 +64,8 @@ int msg_received(void *data);
 
 int msg_sent(void *data);
 
-/** module parameters */
-str _host_uri = {0, 0};
-str _host_port = str_init("5060");
-
 static param_export_t params[] = {
-        {"host_uri",  PARAM_STR, &_host_uri},
-        {"host_port", PARAM_STR, &_host_port},
-        {0, 0,                   0}
+        {0, 0, 0}
 };
 
 /** module exports */
@@ -97,7 +92,7 @@ static int mod_init(void) {
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-#ifdef USE_TCP
+    #ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
 
@@ -221,6 +216,7 @@ int msg_received(void *data) {
 
             break;
         case SSP_RTP_PACKET: //no break
+        case SSP_RTCP_PACKET:
             INFO("RTP/RTCP packet\n");
 
             struct receive_info *ri;
@@ -252,8 +248,6 @@ int msg_received(void *data) {
 
             endpoint_t *src_endpoint = dst_endpoint->sibling;
 
-            DBG("HHH:\n%d\n", msg_type);
-
             str *type = NULL;
             if (msg_type == SSP_RTP_PACKET) {
                 if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
@@ -266,19 +260,15 @@ int msg_received(void *data) {
                     goto done;
                 }
             } else {
-                DBG("HHH:\n%d\n", src_port);
                 if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
-                    ERR("HHH:\nCannot find stream with port '%d'\n", src_port);
+                    ERR("Cannot find stream with port '%d'\n", src_port);
                     goto done;
                 }
 
-                DBG("HHH:\n%.*s\n", type->len, type->s);
                 if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                    ERR("HHH:\nCannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                    ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
                     goto done;
                 }
-
-                DBG("HHH:\n%u\n", dst_port);
             }
 
             struct sockaddr_in *dst_ip = NULL;
@@ -291,9 +281,6 @@ int msg_received(void *data) {
                 INFO("RTP packet sent successfully!\n");
             }
 
-            break;
-        case SSP_RTCP_PACKET:
-            DBG("HHHHH\n");
             break;
         default:
             goto done;
@@ -319,7 +306,7 @@ int msg_sent(void *data) {
         goto done;
     }
 
-    if (change_media_ports(&msg, _host_port) == 0) {
+    if (change_media_ports(&msg, bind_address->port_no_str) == 0) {
         obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
     }
 

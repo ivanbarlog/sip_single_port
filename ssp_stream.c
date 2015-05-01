@@ -58,7 +58,7 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
 
     *streams = head;
 
-    LM_DBG("NEW BODY: %.*s\n", sdp_info->raw_sdp.len, sdp_info->raw_sdp.s);
+            LM_DBG("NEW BODY: %.*s\n", sdp_info->raw_sdp.len, sdp_info->raw_sdp.s);
     ssp_set_body(msg, &(sdp_info->raw_sdp));
 
     return 0;
@@ -155,9 +155,8 @@ int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type)
     return -1;
 }
 
-// todo: add function for RTCP as well
 int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) {
-    char * str_port;
+    char *str_port;
     int success;
 
     endpoint_stream_t *current;
@@ -172,7 +171,7 @@ int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) 
                 return -1;
             }
 
-            *port = (unsigned int)atoi(str_port);
+            *port = (unsigned int) atoi(str_port);
 
             return 0;
         }
@@ -185,8 +184,8 @@ int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) 
 }
 
 int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, str **type) {
-    char * str_port;
-    unsigned int rtp_port;
+    char *str_port;
+    unsigned int rtp_port, rtcp_port;
     int success;
 
     endpoint_stream_t *current;
@@ -200,9 +199,20 @@ int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, st
             return -1;
         }
 
-        rtp_port = (unsigned int)atoi(str_port);
+        rtp_port = (unsigned int) atoi(str_port);
 
-        if (rtp_port == src_port) {
+        success = asprintf(&str_port, "%.*s", current->rtcp_port->len, current->rtcp_port->s);
+
+        if (success == -1) {
+            ERR("asprintf failed to allocate memory\n");
+            return -1;
+        }
+
+        rtcp_port = (unsigned int) atoi(str_port);
+
+        rtcp_port = rtcp_port == 0 ? rtp_port + 1 : rtcp_port;
+
+        if (rtcp_port == src_port) {
             *type = current->media;
 
             return 0;
@@ -227,11 +237,11 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *p
         if (STR_EQ(*(current->media), type)) {
             success = sscanf(current->rtcp_port_raw, "%u %s", &rtcp_port, &tmp);
 
-            if (success == EOF) {
-                *port = (unsigned int)atoi(current->port_raw) + 1;
+            if (success == EOF || rtcp_port == 0) {
+                *port = (unsigned int) atoi(current->port_raw) + 1;
+            } else {
+                *port = rtcp_port;
             }
-
-            *port = rtcp_port;
 
             return 0;
         }

@@ -13,8 +13,6 @@ msg_type get_msg_type(sip_msg_t *msg) {
 
         //if 6th and 5th bit is "10" it's RTCP else RTP
         if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0) {
-            LM_DBG("RTCP mother fucker!\n");
-
             return SSP_RTCP_PACKET;
         } else {
             return SSP_RTP_PACKET;
@@ -33,7 +31,7 @@ int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *
         return -1;
     }
 
-    memset((void *) tmp, 0, (size_t)sizeof(*tmp));
+    memset((void *) tmp, 0, (size_t) sizeof(*tmp));
     tmp->sin_family = AF_INET;
     tmp->sin_addr.s_addr = inet_addr(endpoint_ip);
     tmp->sin_port = htons(port);
