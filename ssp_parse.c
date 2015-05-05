@@ -72,11 +72,7 @@ int cancells_dialog(sip_msg_t *msg) {
             }
 
             unsigned int code = msg->REPLY_STATUS;
-            if (code >= 600 && code < 700 && get_cseq(msg)->method_id == METHOD_INVITE) {
-                return 0;
-            }
-
-            if (code >= 200 && code < 300 && get_cseq(msg)->method_id == METHOD_CANCEL) {
+            if (code >= 300 && code < 700 && get_cseq(msg)->method_id == METHOD_INVITE) {
                 return 0;
             }
         }
