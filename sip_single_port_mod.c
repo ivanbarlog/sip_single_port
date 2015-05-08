@@ -188,6 +188,13 @@ int msg_received(void *data) {
                         ERR("asprintf failed to allocate memory\n");
                         goto done;
                     }
+
+                    if (strcmp(connection->request_endpoint_ip, connection->response_endpoint_ip) == 0) {
+                        connection->same_ip = 1;
+                        fill_in_aliases(connection);
+                    } else {
+                        connection->same_ip = 0;
+                    }
                 }
             }
 
@@ -238,7 +245,7 @@ int msg_received(void *data) {
             }
 
             endpoint_t *dst_endpoint = NULL;
-            if (find_counter_endpoint_by_ip(src_ip, &dst_endpoint) != 0) {
+            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }

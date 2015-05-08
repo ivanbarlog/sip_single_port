@@ -79,9 +79,9 @@ char *print_stream(endpoint_stream_t *stream) {
     success = asprintf(
             &result,
             " | %-12s | %-10s | %-11s |\n%s\n",
-            stream->media_raw != NULL ? stream->media_raw : "none",
-            stream->port_raw != NULL ? stream->port_raw : "none",
-            stream->rtcp_port_raw != NULL ? stream->rtcp_port_raw : "none",
+            stream->media->len != 0 ? stream->media_raw : "none",
+            stream->port->len != 0 ? stream->port_raw : "none",
+            stream->rtcp_port->len != 0 ? stream->rtcp_port_raw : "none",
             get_line()
     );
 
