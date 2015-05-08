@@ -53,9 +53,13 @@
 #include "ssp_connection.h"
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
+#include "../sdpops/api.h"
 
 
 MODULE_VERSION
+
+/* SDPOPS API structure */
+sdpops_api_t sdpops;
 
 /** module functions */
 static int mod_init(void);
@@ -88,6 +92,14 @@ struct module_exports exports = {
  * init module function
  */
 static int mod_init(void) {
+
+    /* bind the SL API */
+    if (sdpops_load_api(&sdpops) != 0) {
+        ERR("cannot bind to sdpops API\n");
+
+        return -1;
+    }
+
 
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
