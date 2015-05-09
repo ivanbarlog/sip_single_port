@@ -68,8 +68,12 @@ int msg_received(void *data);
 
 int msg_sent(void *data);
 
+static int _remove_codecs = 1;
+str _codec_list = str_init("speex,CN,AMR,vorbis,EVRC,EVRC0,EVRC1,EVRCB,EVRCB0,EVRCB1,EVRCWB,EVRCWB0,EVRCWB1");
+
 static param_export_t params[] = {
-        {0, 0, 0}
+        {"rm_codecs", INT_PARAM, &_remove_codecs},
+        {0, 0,                   0}
 };
 
 /** module exports */
@@ -93,13 +97,11 @@ struct module_exports exports = {
  */
 static int mod_init(void) {
 
-    /* bind the SL API */
     if (sdpops_load_api(&sdpops) != 0) {
         ERR("cannot bind to sdpops API\n");
 
         return -1;
     }
-
 
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
@@ -228,7 +230,7 @@ int msg_received(void *data) {
                 remove_connection(call_id);
             }
 
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
+                    LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -322,9 +324,15 @@ int msg_sent(void *data) {
         goto done;
     }
 
-    if (change_media_ports(&msg, bind_address) == 0) {
-        obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
+    if (_remove_codecs == 1 && remove_codecs_with_low_bitrate(&msg, &_codec_list, sdpops) == -1) {
+        goto done;
     }
+
+    if (change_media_ports(&msg, bind_address) == -1) {
+        goto done;
+    }
+
+    obuf->s = update_msg(&msg, (unsigned int *) &obuf->len);
 
     done:
     free_sip_msg(&msg);

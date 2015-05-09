@@ -16,8 +16,10 @@
 #include "../../parser/parse_fline.h"
 #include "../../parser/parse_cseq.h"
 #include "../../parser/sdp/sdp.h"
+#include "../../mod_fix.h"
 
 #include "ssp_functions.h"
+#include "../sdpops/api.h"
 
 /**
  * Updates SIP message before it is sent by Kamailio
@@ -43,5 +45,7 @@ int skip_media_changes(sip_msg_t *msg);
  * Removes old body from msg and replaces it with nb (new body)
  */
 int ssp_set_body(struct sip_msg *msg, str *nb);
+
+int remove_codecs_with_low_bitrate(struct sip_msg *msg, str *codec_list, sdpops_api_t sdpops);
 
 #endif //KAMAILIO_SSP_REPLACE_H

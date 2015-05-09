@@ -219,3 +219,12 @@ int skip_media_changes(sip_msg_t *msg) {
 
     return -1;
 }
+
+int remove_codecs_with_low_bitrate(struct sip_msg *msg, str *codec_list, sdpops_api_t sdpops) {
+
+    if (sdpops.sdp_remove_codecs_by_name(msg, codec_list) < 0) {
+        return -1;
+    }
+
+    return 1;
+}
