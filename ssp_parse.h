@@ -30,10 +30,4 @@ int terminates_dialog(sip_msg_t *msg);
  */
 int cancells_dialog(sip_msg_t *msg);
 
-/**
- * Parses connection structure with endpoint structures
- * from SIP request or SIP response
- */
-int parse_sip_msg(sip_msg_t *msg, int msg_type);
-
 #endif //KAMAILIO_SSP_PARSE_H
