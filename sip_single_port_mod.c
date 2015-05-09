@@ -202,7 +202,9 @@ int msg_received(void *data) {
                         ERR("asprintf failed to allocate memory\n");
                         goto done;
                     }
+                }
 
+                if (connection->request_endpoint_ip && connection->response_endpoint_ip) {
                     if (strcmp(connection->request_endpoint_ip, connection->response_endpoint_ip) == 0) {
                         connection->same_ip = 1;
                         fill_in_aliases(connection);
