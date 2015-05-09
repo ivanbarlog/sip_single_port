@@ -53,13 +53,9 @@
 #include "ssp_connection.h"
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
-#include "../sdpops/api.h"
 
 
 MODULE_VERSION
-
-/* SDPOPS API structure */
-sdpops_api_t sdpops;
 
 /** module functions */
 static int mod_init(void);
@@ -68,11 +64,7 @@ int msg_received(void *data);
 
 int msg_sent(void *data);
 
-static int _remove_codecs = 1;
-str _codec_list = str_init("speex,CN,AMR,vorbis,EVRC,EVRC0,EVRC1,EVRCB,EVRCB0,EVRCB1,EVRCWB,EVRCWB0,EVRCWB1");
-
 static param_export_t params[] = {
-        {"rm_codecs", INT_PARAM, &_remove_codecs},
         {0, 0,                   0}
 };
 
@@ -97,16 +89,10 @@ struct module_exports exports = {
  */
 static int mod_init(void) {
 
-    if (sdpops_load_api(&sdpops) != 0) {
-        ERR("cannot bind to sdpops API\n");
-
-        return -1;
-    }
-
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-#ifdef USE_TCP
+    #ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
 
@@ -202,7 +188,9 @@ int msg_received(void *data) {
                         ERR("asprintf failed to allocate memory\n");
                         goto done;
                     }
+                }
 
+                if (connection->request_endpoint_ip && connection->response_endpoint_ip) {
                     if (strcmp(connection->request_endpoint_ip, connection->response_endpoint_ip) == 0) {
                         connection->same_ip = 1;
                         fill_in_aliases(connection);
@@ -230,7 +218,7 @@ int msg_received(void *data) {
                 remove_connection(call_id);
             }
 
-                    LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -321,10 +309,6 @@ int msg_sent(void *data) {
     msg.len = obuf->len;
 
     if (skip_media_changes(&msg) == -1) {
-        goto done;
-    }
-
-    if (_remove_codecs == 1 && remove_codecs_with_low_bitrate(&msg, &_codec_list, sdpops) == -1) {
         goto done;
     }
 
