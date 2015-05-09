@@ -19,12 +19,9 @@ typedef struct connection {
     str *call_id;
     char *request_endpoint_ip;
     char *response_endpoint_ip;
-    int same_ip;
-    /* if request_endpoint_ip equals response_endpoint_ip this is set to 1 otherwise 0 */
-    alias_t *req_ip_alias;
-    /* Request IP aliases - format IP:port */
-    alias_t *res_ip_alias;
-    /* Response IP aliases - format IP:port */
+    int same_ip; // if request_endpoint_ip equals response_endpoint_ip this is set to 1 otherwise 0
+    alias_t *req_ip_alias; // Request IP aliases - format IP:port
+    alias_t *res_ip_alias; // Response IP aliases - format IP:port
 
     endpoint_t *request_endpoint;
     endpoint_t *response_endpoint;
