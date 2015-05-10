@@ -457,6 +457,11 @@ alias_t *create_alias(char *ip, char *port) {
     alias_t *tmp_alias;
 
     tmp_alias = pkg_malloc(sizeof(alias_t));
+    if (tmp_alias == NULL) {
+        ERR("cannot allocate pkg memory");
+        return NULL;
+    }
+
     tmp_alias->next = NULL;
 
     success = asprintf(

@@ -111,6 +111,10 @@ int msg_received(void *data) {
     str *obuf;
 
     obuf = (str *) pkg_malloc(sizeof(str));
+    if (obuf == NULL) {
+        ERR("cannot allocate pkg memory");
+        goto done;
+    }
 
     obuf->s = s;
     obuf->len = len;
@@ -157,6 +161,10 @@ int msg_received(void *data) {
                 int success;
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
                     connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
+                    if (connection->request_endpoint == NULL) {
+                        ERR("cannot allocate pkg memory");
+                        goto done;
+                    }
 
                     connection->request_endpoint = endpoint;
 
@@ -175,6 +183,10 @@ int msg_received(void *data) {
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
                     connection->response_endpoint = pkg_malloc(sizeof(endpoint_t));
+                    if (connection->response_endpoint == NULL) {
+                        ERR("cannot allocate pkg memory");
+                        goto done;
+                    }
 
                     connection->response_endpoint = endpoint;
 

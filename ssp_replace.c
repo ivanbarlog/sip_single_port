@@ -131,6 +131,10 @@ int change_media_ports(sip_msg_t *msg, struct socket_info *bind_address) {
     }
 
     subst = (str *) pkg_malloc(sizeof(str));
+    if (subst == NULL) {
+        ERR("cannot allocate pkg memory");
+        return -1;
+    }
 
     subst->s = pattern;
     subst->len = strlen(pattern);
