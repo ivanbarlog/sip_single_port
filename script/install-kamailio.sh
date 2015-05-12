@@ -2,8 +2,7 @@
 
 # Installing Kamailio - http://www.kamailio.org/wiki/install/4.1.x/git
 
-
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
   exit
 fi
@@ -19,6 +18,8 @@ cd /usr/local/src
 mkdir kamailio
 chown $SUDO_USER kamailio
 sudo -u $SUDO_USER git clone --depth 1 git@github.com:kamailio/kamailio.git kamailio
+cd kamailio
+sudo -u $SUDO_USER git checkout -b 4.1 origin/4.1
 cd kamailio/modules
 
 # clone sip_single_port module
@@ -26,7 +27,7 @@ sudo -u $SUDO_USER git clone git@github.com:ivanbarlog/sip_single_port.git sip_s
 cd ..
 
 # add necessary modules to config; compile & install
-make include_modules="db_mysql sip_single_port nathelper" cfg
+make include_modules="db_mysql sip_single_port" cfg
 make all
 make install
 
