@@ -58,9 +58,6 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
 
     *streams = head;
 
-            LM_DBG("NEW BODY: %.*s\n", sdp_info->raw_sdp.len, sdp_info->raw_sdp.s);
-    ssp_set_body(msg, &(sdp_info->raw_sdp));
-
     return 0;
 }
 

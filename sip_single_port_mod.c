@@ -130,12 +130,12 @@ int msg_received(void *data) {
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
-            if (initializes_dialog(&msg) == 0) {
-                if (parse_call_id(&msg, &call_id) == -1) {
-                    ERR("Cannot parse Call-ID\n");
-                    goto done;
-                }
+            if (parse_call_id(&msg, &call_id) == -1) {
+                ERR("Cannot parse Call-ID\n");
+                goto done;
+            }
 
+            if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
                 endpoint = parse_endpoint(&msg);
                 if (endpoint == NULL) {
@@ -213,20 +213,10 @@ int msg_received(void *data) {
             }
 
             if (cancells_dialog(&msg) == 0) {
-                if (parse_call_id(&msg, &call_id) == -1) {
-                    ERR("Cannot parse Call-ID\n");
-                    goto done;
-                }
-
                 remove_connection(call_id);
             }
 
             if (terminates_dialog(&msg) == 0) {
-                if (parse_call_id(&msg, &call_id) == -1) {
-                    ERR("Cannot parse Call-ID\n");
-                    goto done;
-                }
-
                 remove_connection(call_id);
             }
 
