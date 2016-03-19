@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./deploy-kamailio 2>&1 | grep "sip_single_port"

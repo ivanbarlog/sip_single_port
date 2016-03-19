@@ -465,8 +465,8 @@ modparam("debugger", "cfgtrace", 0)
 # - note: this is the same as route { ... }
 request_route {
 
-	$var(a)=www_authenticate("192.168.0.31", "subscriber");
-	xlog("\n\nWWW_AUTHENTICATE OUTPUT:\n\n\n\n\n\n$var(a)\n\n\n\n\n\n\n\n");
+###	$var(a)=www_authenticate("192.168.0.31", "subscriber");
+###	xlog("\n\nWWW_AUTHENTICATE OUTPUT:\n\n\n\n\n\n$var(a)\n\n\n\n\n\n\n\n");
 
 
 	if (uri != myself)
@@ -774,21 +774,14 @@ route[AUTH] {
 route[NATDETECT] {
 #!ifdef WITH_NAT
 	force_rport();
-	if (nat_uac_test("19")) {
+#	if (nat_uac_test("19")) {
 		if (is_method("REGISTER")) {
 			fix_nated_register();
 		} else {
-			# sip_single_port: fix nated sdp
-			if (has_body("application/sdp"))
-			{
-				log("asdf before fix_nated_sdp");
-#				fix_nated_sdp("2", "192.168.0.31");
-			}
-
 			add_contact_alias();
 		}
 		setflag(FLT_NATS);
-	}
+#	}
 #!endif
 	return;
 }
@@ -928,20 +921,23 @@ branch_route[MANAGE_BRANCH] {
 
 # manage incoming replies
 onreply_route[MANAGE_REPLY] {
-	xdbg("incoming reply\n");
+
+	# if REGISTER 200 OK is from local subscriber
+        # forward it to another kamailio so it can save location
+        if (is_method("REGISTER") && status =~ "200" && from_uri==myself) {
+                # no exit because we want to handle REGISTER message
+                forward(192.168.0.32, 5060);
+        }
+
+###	if (uri != myself)
+###        {
+###                forward(192.168.0.32, 5060);
+###		exit;
+###	}
+
+
 	if(status=~"[12][0-9][0-9]")
 		route(NATMANAGE);
-
-	if(status=~"200")
-	{
-		if (has_body("application/sdp"))
-		{
-			# sip_single_port: fix nated sdp
-			log("asdf before fix_nated_sdp");
-#			fix_nated_sdp("2", "192.168.0.31");
-		}
-
-	}
 }
 
 # manage failure routing cases
@@ -963,7 +959,7 @@ failure_route[MANAGE_FAILURE] {
 #!ifdef WITH_VOICEMAIL
 	# serial forking
 	# - route to voicemail on busy or no answer (timeout)
-	if (t_check_status("486|408")) {
+#if (t_check_status("486|408")) {
 		$du = $null;
 		route(TOVOICEMAIL);
 		exit;
