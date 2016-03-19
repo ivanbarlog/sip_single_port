@@ -64,7 +64,15 @@ int msg_received(void *data);
 
 int msg_sent(void *data);
 
+typedef enum proxy_mode {
+    SINGLE_PROXY_MODE,
+    DUAL_PROXY_MODE,
+} proxy_mode;
+
+static int mode = SINGLE_PROXY_MODE;
+
 static param_export_t params[] = {
+        {"mode", INT_PARAM, &mode},
         {0, 0,                   0}
 };
 
