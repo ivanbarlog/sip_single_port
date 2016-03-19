@@ -2,13 +2,3 @@
 *.d
 *.so
 *.lst
-vmware/kamailioA_src
-!vmware/kamailioA_src/.gitkeep
-vmware/kamailioA_etc
-!vmware/kamailioA_etc/.gitkeep
-vmware/kamailioB_src
-!vmware/kamailioB_src/.gitkeep
-vmware/kamailioB_etc
-!vmware/kamailioB_etc/.gitkeep
-vmware/kamailioA
-vmware/kamailioB
