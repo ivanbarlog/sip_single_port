@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo -e "\e[30;48;5;82m make sip_single_port module \e[0m"
+make modules modules=modules/sip_single_port
+
+echo -e "\e[30;48;5;82m install kamailio \e[0m"
+make install
+
+echo -e "\e[30;48;5;82m run kamailio \e[0m"
+kamailio
