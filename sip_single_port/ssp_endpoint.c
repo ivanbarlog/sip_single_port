@@ -23,7 +23,7 @@ static int parse_creator_ip(sip_msg_t *msg, char **ip) {
     return 0;
 }
 
-endpoint_t *parse_endpoint(sip_msg_t *msg) {
+endpoint_t *parse_endpoint(sip_msg_t *msg, str call_id) {
     endpoint_t *endpoint;
     endpoint = pkg_malloc(sizeof(endpoint_t));
 
@@ -42,6 +42,11 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     parse_streams(msg, &endpoint->streams);
 
     parse_creator_ip(msg, &endpoint->ip);
+
+    if (copy_str(&call_id, &(endpoint->call_id_raw), &(endpoint->call_id)) == -1) {
+        ERR("cannot allocate memory.\n");
+        return NULL;
+    }
 
     return endpoint;
 }
@@ -62,8 +67,8 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     success = asprintf(
             &endpoint_info,
-            "%s (%s)",
-            label, endpoint->ip
+            "%s (%s); Call-ID: %.*s",
+            label, endpoint->ip, endpoint->call_id->len, endpoint->call_id->s
     );
 
     if (success == -1) {

@@ -100,9 +100,9 @@ static int mod_init(void) {
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-    #ifdef USE_TCP
-	tcp_set_clone_rcvbuf(1);
-	#endif
+#ifdef USE_TCP
+    tcp_set_clone_rcvbuf(1);
+#endif
 
     return 0;
 }
@@ -127,6 +127,11 @@ int msg_received(void *data) {
     obuf->s = s;
     obuf->len = len;
 
+    INFO("\n\n\nDUAL_PROXY_MODE obuf->len: %d, strlen(obuf->s): %d\n\n\n", obuf->len, strlen(obuf->s));
+    if (obuf->len == 0 || strlen(obuf->s) == 0) {
+        ERR("empty packet");
+        return 0;
+    }
 
     memset(&msg, 0, sizeof(sip_msg_t));
     msg.buf = obuf->s;
@@ -145,7 +150,7 @@ int msg_received(void *data) {
 
             if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
-                endpoint = parse_endpoint(&msg);
+                endpoint = parse_endpoint(&msg, call_id);
                 if (endpoint == NULL) {
                     ERR("Cannot parse Endpoint\n");
                     goto done;
@@ -257,34 +262,170 @@ int msg_received(void *data) {
             }
 
             endpoint_t *dst_endpoint = NULL;
-            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
-                ERR("Cannot find counter part endpoint\n");
-                goto done;
-            }
 
-            endpoint_t *src_endpoint = dst_endpoint->sibling;
-
-            str *type = NULL;
-            if (msg_type == SSP_RTP_PACKET) {
-                if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
-                    ERR("Cannot find stream with port '%d'\n", src_port);
+            if (mode == SINGLE_PROXY_MODE) {
+                if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
+                    ERR("Cannot find counter part endpoint\n");
                     goto done;
                 }
 
-                if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                    ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
-                    goto done;
+                endpoint_t *src_endpoint = dst_endpoint->sibling;
+
+                str *type = NULL;
+                if (msg_type == SSP_RTP_PACKET) {
+                    if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
+                        ERR("Cannot find stream with port '%d'\n", src_port);
+                        goto done;
+                    }
+
+                    if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
+                        ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                        goto done;
+                    }
+                } else {
+                    if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
+                        ERR("Cannot find stream with port '%d'\n", src_port);
+                        goto done;
+                    }
+
+                    if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
+                        ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                        goto done;
+                    }
                 }
+            } else if (mode == DUAL_PROXY_MODE) {
+                unsigned char first_byte = obuf->s[0];
+
+                char *tag;
+                str *type = NULL;
+
+                INFO("\n\n\nDUAL_PROXY_MODE\nRTP/RTCP first_byte: %02x\n\n\n", first_byte);
+                INFO("\n\n\nDUAL_PROXY_MODE\nMSG (%d, %d):\n\n\n'%.*s'\n\n\n", obuf->len, strlen(obuf->s), obuf->len, obuf->s);
+
+                // the RTP/RTCP packet is already modified
+                if (!!(first_byte & BIT7) == 1 && !!(first_byte & BIT6) == 1) {
+                    INFO("DUAL_PROXY_MODE changed RTP\n");
+//                    unsigned int tag_length = pkg_malloc(sizeof(char) * 2);
+//                    memcpy(tag_length, s[1], 2 * sizeof(char));
+//
+//                    char *tag = pkg_malloc(sizeof(char) * tag_length);
+//                    memcpy(tag, s[3], tag_length * sizeof(char));
+//
+//                    const char delim[2] = ":";
+//                    char *call_id, *media_type;
+//
+//                    call_id = strtok(str, delim);
+//                    media_type = strtok(NULL, delim);
+//
+//                    str* call_id_str = (str *) pkg_malloc(sizeof(str));
+//                    call_id_str->s = call_id;
+//                    call_id_str->len = strlen(call_id);
+//
+//                    connection_t *connection = NULL;
+//                    if (find_connection_by_call_id(call_id, &connection) == -1) {
+//                        ERR("cannot find connection\n");
+//                        goto done;
+//                    }
+//
+//                    if (get_counter_port(src_ip, media_type, connection, &dst_port) == -1) {
+//                        ERR("cannot find destination port\n");
+//                        goto done;
+//                    }
+//
+//                    // create final_msg which has length of original message - 2B for tag_length - tag_length B
+//                    char *final_msg = pkg_malloc(sizeof(char) * (strlen(s) - 2 - tag_length));
+
+                } else {
+                    INFO("DUAL_PROXY_MODE original RTP\n(changing RPT)\n");
+
+                    if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
+                        ERR("Cannot find counter part endpoint\n");
+                        goto done;
+                    }
+
+                    endpoint_t *src_endpoint = dst_endpoint->sibling;
+
+                    INFO("DUAL_PROXY_MODE finding media type & destination port of RTP/RTCP packet\n");
+                    if (msg_type == SSP_RTP_PACKET) {
+                        if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
+                            ERR("Cannot find stream with port '%d'\n", src_port);
+                            goto done;
+                        }
+
+                        if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
+                            ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                            goto done;
+                        }
+                    } else {
+                        if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
+                            ERR("Cannot find stream with port '%d'\n", src_port);
+                            goto done;
+                        }
+
+                        if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
+                            ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                            goto done;
+                        }
+                    }
+
+                    INFO("%s\n", print_endpoint(src_endpoint, "src endpoint"));
+                    INFO("%s\n", print_endpoint(dst_endpoint, "dst endpoint"));
+
+                    INFO("DUAL_PROXY_MODE src call_id: %.*s\n", src_endpoint->call_id->len, src_endpoint->call_id->s);
+                    INFO("DUAL_PROXY_MODE dst call_id: %.*s\n", dst_endpoint->call_id->len, dst_endpoint->call_id->s);
+
+                    INFO("DUAL_PROXY_MODE create tag\n");
+                    success = asprintf(
+                            &tag,
+                            "%.*s:%.*s",
+                            src_endpoint->call_id->len, src_endpoint->call_id->s,
+                            type->len, type->s
+                    );
+
+                    if (success == -1) {
+                        ERR("asprintf failed to allocate memory\n");
+                        goto done;
+                    }
+
+                    INFO("DUAL_PROXY_MODE tag: '%s'\n", tag);
+
+                    int tag_length = strlen(tag) * sizeof(char);
+
+                    int original_length = strlen(obuf->s);
+
+                    // original message length + tag length + 2B for tag length field
+                    int modified_msg_length = original_length + tag_length + 2;
+                    unsigned char *modified_msg = pkg_malloc(sizeof(unsigned char) * modified_msg_length);
+
+                    INFO("DUAL_PROXY_MODE\ntag_length: %d\nmodified_msg_length: %d\n", tag_length, modified_msg_length);
+
+                    // set first byte to `bin(11xxxxxx)`
+                    unsigned char changed_first_byte = first_byte | 0xc0;
+
+                    INFO("DUAL_PROXY_MODE\nobuf->s[0]: %02x\nchanged_first_byte: %02x\n", first_byte, changed_first_byte);
+
+                    memcpy(&modified_msg, changed_first_byte, sizeof(unsigned char));
+
+                    INFO("DUAL_PROXY_MODE\nchanged_first_byte: %02x\nmodified_msg: %s\n", changed_first_byte, modified_msg);
+
+                    sprintf(&modified_msg[1], "%04x", tag_length);
+
+                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+
+                    // copy the tag after it's size
+                    memcpy(&modified_msg[3], tag, tag_length);
+                    // copy rest of the original message after the tag
+                    memcpy(&modified_msg[3 + tag_length], obuf->s[1], sizeof(char) * (original_length - 1));
+
+                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+
+                    obuf->s = modified_msg;
+                    obuf->len = modified_msg_length;
+                }
+
             } else {
-                if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
-                    ERR("Cannot find stream with port '%d'\n", src_port);
-                    goto done;
-                }
-
-                if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                    ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
-                    goto done;
-                }
+                ERR("Unknown mode\n");
+                goto done;
             }
 
             struct sockaddr_in *dst_ip = NULL;
@@ -300,7 +441,6 @@ int msg_received(void *data) {
             break;
         default:
             goto done;
-            break;
     }
 
     done:

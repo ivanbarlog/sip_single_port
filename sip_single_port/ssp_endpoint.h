@@ -23,6 +23,8 @@
  */
 typedef struct endpoint {
     char *ip;
+    char *call_id_raw;
+    str *call_id;
 
     /* list of all media streams */
     struct endpoint_stream *streams;
@@ -36,7 +38,7 @@ typedef struct endpoint {
  * Returns 0 on success, -1 otherwise
  * If parsing fails endpoint is set to NULL
  */
-endpoint_t *parse_endpoint(sip_msg_t *msg);
+endpoint_t *parse_endpoint(sip_msg_t *msg, str call_id);
 
 /**
  * Returns string containing formatted endpoint structure

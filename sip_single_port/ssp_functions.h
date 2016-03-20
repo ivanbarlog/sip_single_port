@@ -1,6 +1,7 @@
 #ifndef KAMAILIO_SSP_FUNCTIONS_H
 #define KAMAILIO_SSP_FUNCTIONS_H
 
+#define BIT7 0x80
 #define BIT6 0x40
 #define BIT5 0x20
 
