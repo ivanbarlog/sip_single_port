@@ -404,7 +404,9 @@ int msg_received(void *data) {
 
                     INFO("DUAL_PROXY_MODE\nobuf->s[0]: %02x\nchanged_first_byte: %02x\n", first_byte, changed_first_byte);
 
-                    memcpy(&modified_msg, changed_first_byte, sizeof(unsigned char));
+                    DBG("before memcpy");
+                    memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
+                    DBG("after memcpy");
 
                     INFO("DUAL_PROXY_MODE\nchanged_first_byte: %02x\nmodified_msg: %s\n", changed_first_byte, modified_msg);
 
@@ -413,9 +415,12 @@ int msg_received(void *data) {
                     INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
 
                     // copy the tag after it's size
-                    memcpy(&modified_msg[3], tag, tag_length);
+                    memcpy(&modified_msg[3], &tag, tag_length);
+
+                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+
                     // copy rest of the original message after the tag
-                    memcpy(&modified_msg[3 + tag_length], obuf->s[1], sizeof(char) * (original_length - 1));
+                    memcpy(&modified_msg[3 + tag_length], obuf->s, sizeof(char) * (original_length - 1));
 
                     INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
 
