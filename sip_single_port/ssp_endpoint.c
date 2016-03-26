@@ -62,13 +62,25 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     char *result;
     char *endpoint_info;
+    char *call_id;
     char *streams_info;
     int success;
 
     success = asprintf(
             &endpoint_info,
-            "%s (%s); Call-ID: %.*s",
-            label, endpoint->ip, endpoint->call_id->len, endpoint->call_id->s
+            "%s (%s)",
+            label, endpoint->ip
+    );
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return NULL;
+    }
+
+    success = asprintf(
+            &call_id,
+            "Call-ID: %.*s",
+            endpoint->call_id->len, endpoint->call_id->s
     );
 
     if (success == -1) {
@@ -80,9 +92,10 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n%s\n",
+            "%s\n | %-39s |\n | %-39s |\n%s\n",
             get_hdr_line(),
             endpoint_info,
+            call_id,
             streams_info
     );
 

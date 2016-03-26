@@ -57,6 +57,21 @@
 
 MODULE_VERSION
 
+char * print_hex(str *str) {
+    int i;
+    char *buf = NULL;
+
+    for (i = 0; i < str->len; i++) {
+        if (buf == NULL) {
+            asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
+        } else {
+            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str->s[i] & 0xFF));
+        }
+    }
+
+    return buf;
+}
+
 /** module functions */
 static int mod_init(void);
 
@@ -127,9 +142,8 @@ int msg_received(void *data) {
     obuf->s = s;
     obuf->len = len;
 
-    INFO("\n\n\nDUAL_PROXY_MODE obuf->len: %d, strlen(obuf->s): %d\n\n\n", obuf->len, strlen(obuf->s));
     if (obuf->len == 0 || strlen(obuf->s) == 0) {
-        ERR("empty packet");
+        ERR("skipping empty packet");
         return 0;
     }
 
@@ -262,15 +276,13 @@ int msg_received(void *data) {
             }
 
             endpoint_t *dst_endpoint = NULL;
+            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
+                ERR("Cannot find counter part endpoint\n");
+                goto done;
+            }
+            endpoint_t *src_endpoint = dst_endpoint->sibling;
 
             if (mode == SINGLE_PROXY_MODE) {
-                if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
-                    ERR("Cannot find counter part endpoint\n");
-                    goto done;
-                }
-
-                endpoint_t *src_endpoint = dst_endpoint->sibling;
-
                 str *type = NULL;
                 if (msg_type == SSP_RTP_PACKET) {
                     if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
@@ -294,17 +306,60 @@ int msg_received(void *data) {
                     }
                 }
             } else if (mode == DUAL_PROXY_MODE) {
+                int tag_length;
                 unsigned char first_byte = obuf->s[0];
 
                 char *tag;
                 str *type = NULL;
 
-                INFO("\n\n\nDUAL_PROXY_MODE\nRTP/RTCP first_byte: %02x\n\n\n", first_byte);
-                INFO("\n\n\nDUAL_PROXY_MODE\nMSG (%d, %d):\n\n\n'%.*s'\n\n\n", obuf->len, strlen(obuf->s), obuf->len, obuf->s);
+                INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex(obuf));
 
                 // the RTP/RTCP packet is already modified
                 if (!!(first_byte & BIT7) == 1 && !!(first_byte & BIT6) == 1) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
+
+                    INFO("before pkgmalloc");
+                    tag_length = (int)(obuf->s[1] & 0xff);
+
+//                    success = asprintf(
+//                            &tag,
+//                            "%.*s",
+//                            tag_length, &(obuf->s[2])
+//                    );
+//
+//                    if (success == -1) {
+//                        ERR("asprintf failed to allocate memory\n");
+//                        goto done;
+//                    }
+
+                    char tag2[tag_length];
+                    memcpy(&tag2, &(obuf->s[2]), sizeof(char) * tag_length);
+
+//                    memcpy(&modified_msg[3], &tag, tag_length);
+
+                    str *tag3 = pkg_malloc(sizeof(str));
+                    tag3->s = &(obuf->s[2]);
+                    tag3->len = tag_length;
+
+                    INFO(
+                            "\n\n\n>>> tag: '%.*s';tag length: %d; tag: '%s'; strlen: %d\n\n'%.*s'\n\n\n",
+                            tag_length,
+                            &(obuf->s[2]),
+                            tag_length,
+                            tag2,
+                            strlen(tag2),
+                            tag3->len, tag3->s
+                    );
+
+//                    int tag_length_str[sizeof(int)];
+//                    memcpy(&tag_length_str[0], &obuf->s[1], sizeof(int));
+//
+//                    sscanf(tag_length_str, "%d", &tag_length);
+//
+//                    INFO("\n\n\n>>> tag length: %d; str: %s\n\n\n", tag_length, tag_length_str);
+
+                    goto done;
+
 //                    unsigned int tag_length = pkg_malloc(sizeof(char) * 2);
 //                    memcpy(tag_length, s[1], 2 * sizeof(char));
 //
@@ -338,14 +393,6 @@ int msg_received(void *data) {
                 } else {
                     INFO("DUAL_PROXY_MODE original RTP\n(changing RPT)\n");
 
-                    if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
-                        ERR("Cannot find counter part endpoint\n");
-                        goto done;
-                    }
-
-                    endpoint_t *src_endpoint = dst_endpoint->sibling;
-
-                    INFO("DUAL_PROXY_MODE finding media type & destination port of RTP/RTCP packet\n");
                     if (msg_type == SSP_RTP_PACKET) {
                         if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
                             ERR("Cannot find stream with port '%d'\n", src_port);
@@ -368,13 +415,6 @@ int msg_received(void *data) {
                         }
                     }
 
-                    INFO("%s\n", print_endpoint(src_endpoint, "src endpoint"));
-                    INFO("%s\n", print_endpoint(dst_endpoint, "dst endpoint"));
-
-                    INFO("DUAL_PROXY_MODE src call_id: %.*s\n", src_endpoint->call_id->len, src_endpoint->call_id->s);
-                    INFO("DUAL_PROXY_MODE dst call_id: %.*s\n", dst_endpoint->call_id->len, dst_endpoint->call_id->s);
-
-                    INFO("DUAL_PROXY_MODE create tag\n");
                     success = asprintf(
                             &tag,
                             "%.*s:%.*s",
@@ -387,49 +427,44 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    INFO("DUAL_PROXY_MODE tag: '%s'\n", tag);
+                    tag_length = strlen(tag) /** sizeof(char)*/;
+                    int original_length = obuf->len;
 
-                    int tag_length = strlen(tag) * sizeof(char);
+                    INFO("DUAL_PROXY_MODE tag (%d): '%s'\n", tag_length, tag);
 
-                    int original_length = strlen(obuf->s);
-
-                    // original message length + tag length + 2B for tag length field
-                    int modified_msg_length = original_length + tag_length + 2;
+                    // original message length + tag length + 2B for tag length field + 1B for \0
+                    int modified_msg_length = original_length + tag_length + 2 + 1;
                     unsigned char *modified_msg = pkg_malloc(sizeof(unsigned char) * modified_msg_length);
-
-                    INFO("DUAL_PROXY_MODE\ntag_length: %d\nmodified_msg_length: %d\n", tag_length, modified_msg_length);
 
                     // set first byte to `bin(11xxxxxx)`
                     unsigned char changed_first_byte = first_byte | 0xc0;
-
-                    INFO("DUAL_PROXY_MODE\nobuf->s[0]: %02x\nchanged_first_byte: %02x\n", first_byte, changed_first_byte);
-
-                    DBG("before memcpy");
                     memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
-                    DBG("after memcpy");
 
-                    INFO("DUAL_PROXY_MODE\nchanged_first_byte: %02x\nmodified_msg: %s\n", changed_first_byte, modified_msg);
-
-                    sprintf(&modified_msg[1], "%04x", tag_length);
-
-                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+                    memcpy(&modified_msg[1], &tag_length, sizeof(int));
 
                     // copy the tag after it's size
                     memcpy(&modified_msg[3], &tag, tag_length);
 
-                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+                    char *tag_copy = pkg_malloc(sizeof(char) * tag_length);
+                    memcpy(tag_copy, &modified_msg[3], tag_length);
+
+                    str tag_copy_str;
+                    tag_copy_str.s = tag_copy;
+                    tag_copy_str.len = tag_length;
+
+                    INFO("\n\n\n\n\n\n\n\n\n\n'%s'\n'%s'\n\n\n\n\n\n\n\n\n\n\n", tag_copy, print_hex(&tag_copy_str));
 
                     // copy rest of the original message after the tag
-                    memcpy(&modified_msg[3 + tag_length], obuf->s, sizeof(char) * (original_length - 1));
-
-                    INFO("DUAL_PROXY_MODE\nmodified_msg: %s\n", modified_msg);
+                    memcpy(&modified_msg[3 + tag_length], obuf->s, sizeof(char) * original_length);
 
                     obuf->s = modified_msg;
                     obuf->len = modified_msg_length;
+
+                    INFO("\n\n>>> Modified obuf:\n\n%s\n\n", print_hex(obuf));
                 }
 
             } else {
-                ERR("Unknown mode\n");
+                ERR("Unknown sip_single_port mode\n");
                 goto done;
             }
 
