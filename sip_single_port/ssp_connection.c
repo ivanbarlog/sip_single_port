@@ -270,7 +270,7 @@ int find_endpoint_by_alias(alias_t *aliases, char *ip_port) {
 }
 
 int get_counter_port(const char *ip, str type, connection_t *connection, unsigned short *port) {
-    *port = NULL;
+    port = NULL;
     endpoint_t *counter_endpoint = NULL;
 
     if (connection->request_endpoint_ip == ip) {
@@ -286,7 +286,7 @@ int get_counter_port(const char *ip, str type, connection_t *connection, unsigne
         return -1;
     }
 
-    if (get_stream_port(counter_endpoint->streams, type, &port) == -1) {
+    if (get_stream_port(counter_endpoint->streams, type, port) == -1) {
         ERR("Cannot find counter part stream with type '%.*s'\n", type.len, type.s);
         return -1;
     }

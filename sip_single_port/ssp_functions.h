@@ -51,4 +51,14 @@ int str_to_char(str *value, char **new_value);
 
 int copy_str(str *value, char **new_value, str **copy);
 
+/**
+ * Returns hex representation string of the bytes in str
+ */
+char * print_hex_str(str *str);
+
+/**
+ * Returns hex representation string of the bytes in str
+ */
+char * print_hex(char *str);
+
 #endif //KAMAILIO_SSP_FUNCTIONS_H

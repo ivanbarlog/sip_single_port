@@ -57,36 +57,6 @@
 
 MODULE_VERSION
 
-char * print_hex_str(str *str) {
-    int i;
-    char *buf = NULL;
-
-    for (i = 0; i < str->len; i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
-        } else {
-            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str->s[i] & 0xFF));
-        }
-    }
-
-    return buf;
-}
-
-char * print_hex(char *str) {
-    int i;
-    char *buf = NULL;
-
-    for (i = 0; i < sizeof(str)/sizeof(char); i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str[i] & 0xFF));
-        } else {
-            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str[i] & 0xFF));
-        }
-    }
-
-    return buf;
-}
-
 /** module functions */
 static int mod_init(void);
 
