@@ -57,7 +57,7 @@
 
 MODULE_VERSION
 
-char * print_hex(str *str) {
+char * print_hex_str(str *str) {
     int i;
     char *buf = NULL;
 
@@ -66,6 +66,21 @@ char * print_hex(str *str) {
             asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
         } else {
             asprintf(&buf, "%s%02x ", buf, (unsigned int)(str->s[i] & 0xFF));
+        }
+    }
+
+    return buf;
+}
+
+char * print_hex(char *str) {
+    int i;
+    char *buf = NULL;
+
+    for (i = 0; i < sizeof(str)/sizeof(char); i++) {
+        if (buf == NULL) {
+            asprintf(&buf, "%02x ", (unsigned int)(str[i] & 0xFF));
+        } else {
+            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str[i] & 0xFF));
         }
     }
 
@@ -312,44 +327,15 @@ int msg_received(void *data) {
                 char *tag;
                 str *type = NULL;
 
-                INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex(obuf));
+                INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex_str(obuf));
 
                 // the RTP/RTCP packet is already modified
                 if (!!(first_byte & BIT7) == 1 && !!(first_byte & BIT6) == 1) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
-                    INFO("before pkgmalloc");
-                    tag_length = (int)(obuf->s[1] & 0xff);
+                    sscanf((char *) &(obuf->s[1]), "%s", tag);
 
-//                    success = asprintf(
-//                            &tag,
-//                            "%.*s",
-//                            tag_length, &(obuf->s[2])
-//                    );
-//
-//                    if (success == -1) {
-//                        ERR("asprintf failed to allocate memory\n");
-//                        goto done;
-//                    }
-
-                    char tag2[tag_length];
-                    memcpy(&tag2, &(obuf->s[2]), sizeof(char) * tag_length);
-
-//                    memcpy(&modified_msg[3], &tag, tag_length);
-
-                    str *tag3 = pkg_malloc(sizeof(str));
-                    tag3->s = &(obuf->s[2]);
-                    tag3->len = tag_length;
-
-                    INFO(
-                            "\n\n\n>>> tag: '%.*s';tag length: %d; tag: '%s'; strlen: %d\n\n'%.*s'\n\n\n",
-                            tag_length,
-                            &(obuf->s[2]),
-                            tag_length,
-                            tag2,
-                            strlen(tag2),
-                            tag3->len, tag3->s
-                    );
+                    INFO("\n\n\n>>> tag: '%s'\n\n\n", tag);
 
 //                    int tag_length_str[sizeof(int)];
 //                    memcpy(&tag_length_str[0], &obuf->s[1], sizeof(int));
@@ -427,40 +413,29 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    tag_length = strlen(tag) /** sizeof(char)*/;
+                    // add byte for '\0' to length
+                    tag_length = sizeof(char) * (strlen(tag) + 1);
                     int original_length = obuf->len;
 
                     INFO("DUAL_PROXY_MODE tag (%d): '%s'\n", tag_length, tag);
 
-                    // original message length + tag length + 2B for tag length field + 1B for \0
-                    int modified_msg_length = original_length + tag_length + 2 + 1;
-                    unsigned char *modified_msg = pkg_malloc(sizeof(unsigned char) * modified_msg_length);
+                    // 1B is for modified RTP/RTCP v3 header
+                    int modified_msg_length = 1 + tag_length + original_length;
+                    char *modified_msg = pkg_malloc(sizeof(char) * modified_msg_length);
 
                     // set first byte to `bin(11xxxxxx)`
                     unsigned char changed_first_byte = first_byte | 0xc0;
-                    memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
+                    memcpy(modified_msg, &changed_first_byte, sizeof(char));
 
-                    memcpy(&modified_msg[1], &tag_length, sizeof(int));
-
-                    // copy the tag after it's size
-                    memcpy(&modified_msg[3], &tag, tag_length);
-
-                    char *tag_copy = pkg_malloc(sizeof(char) * tag_length);
-                    memcpy(tag_copy, &modified_msg[3], tag_length);
-
-                    str tag_copy_str;
-                    tag_copy_str.s = tag_copy;
-                    tag_copy_str.len = tag_length;
-
-                    INFO("\n\n\n\n\n\n\n\n\n\n'%s'\n'%s'\n\n\n\n\n\n\n\n\n\n\n", tag_copy, print_hex(&tag_copy_str));
+                    memcpy(&(modified_msg[1]), &tag, tag_length);
 
                     // copy rest of the original message after the tag
-                    memcpy(&modified_msg[3 + tag_length], obuf->s, sizeof(char) * original_length);
+                    memcpy(&(modified_msg[1 + tag_length]), obuf->s, sizeof(char) * original_length);
 
                     obuf->s = modified_msg;
                     obuf->len = modified_msg_length;
 
-                    INFO("\n\n>>> Modified obuf:\n\n%s\n\n", print_hex(obuf));
+                    INFO("\n\n>>> Modified obuf:\n\n%s\n\n", print_hex_str(obuf));
                 }
 
             } else {
