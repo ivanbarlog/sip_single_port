@@ -297,54 +297,69 @@ int msg_received(void *data) {
                 char *tag;
                 str *type = NULL;
 
-                INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex_str(obuf));
+                INFO("\n\n>>> Received obuf:\n\n%s\n\n", print_hex_str(obuf));
 
                 // the RTP/RTCP packet is already modified
                 if (!!(first_byte & BIT7) == 1 && !!(first_byte & BIT6) == 1) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
-                    sscanf((char *) &(obuf->s[1]), "%s", tag);
+                    success = asprintf(
+                            &tag,
+                            "%s",
+                            &(obuf->s[1])
+                    );
 
-                    INFO("\n\n\n>>> tag: '%s'\n\n\n", tag);
+                    if (success == -1) {
+                        ERR("asprintf failed to allocate memory\n");
+                        goto done;
+                    }
 
-//                    int tag_length_str[sizeof(int)];
-//                    memcpy(&tag_length_str[0], &obuf->s[1], sizeof(int));
-//
-//                    sscanf(tag_length_str, "%d", &tag_length);
-//
-//                    INFO("\n\n\n>>> tag length: %d; str: %s\n\n\n", tag_length, tag_length_str);
+                    tag_length = strlen(tag);
 
+//                    sscanf((char *) &(obuf->s[3]), "%s", tag);
+
+                    INFO("\n\n\n>>> tag (%d): '%s'\n\n\n", tag_length, tag);
+
+                    const char delim[2] = ":";
+                    char *call_id, *media_type;
+
+                    call_id = strtok(tag, delim);
+                    media_type = strtok(NULL, delim);
+
+                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id, media_type, print_hex(media_type));
                     goto done;
 
-//                    unsigned int tag_length = pkg_malloc(sizeof(char) * 2);
-//                    memcpy(tag_length, s[1], 2 * sizeof(char));
-//
-//                    char *tag = pkg_malloc(sizeof(char) * tag_length);
-//                    memcpy(tag, s[3], tag_length * sizeof(char));
-//
-//                    const char delim[2] = ":";
-//                    char *call_id, *media_type;
-//
-//                    call_id = strtok(str, delim);
-//                    media_type = strtok(NULL, delim);
-//
-//                    str* call_id_str = (str *) pkg_malloc(sizeof(str));
-//                    call_id_str->s = call_id;
-//                    call_id_str->len = strlen(call_id);
-//
-//                    connection_t *connection = NULL;
-//                    if (find_connection_by_call_id(call_id, &connection) == -1) {
-//                        ERR("cannot find connection\n");
-//                        goto done;
-//                    }
-//
-//                    if (get_counter_port(src_ip, media_type, connection, &dst_port) == -1) {
-//                        ERR("cannot find destination port\n");
-//                        goto done;
-//                    }
-//
-//                    // create final_msg which has length of original message - 2B for tag_length - tag_length B
-//                    char *final_msg = pkg_malloc(sizeof(char) * (strlen(s) - 2 - tag_length));
+                    str* call_id_str = (str *) pkg_malloc(sizeof(str));
+                    call_id_str->s = call_id;
+                    call_id_str->len = strlen(call_id);
+
+                    str* type = (str *) pkg_malloc(sizeof(str));
+                    type->s = media_type;
+                    type->len = strlen(media_type);
+
+                    connection_t *connection = NULL;
+                    if (find_connection_by_call_id(*call_id_str, &connection) == -1) {
+                        ERR("cannot find connection\n");
+                        goto done;
+                    }
+
+                    if (get_counter_port(src_ip, *type, connection, &dst_port) == -1) {
+                        ERR("cannot find destination port\n");
+                        goto done;
+                    }
+
+                    tag_length = strlen(tag) + 1;
+
+                    int original_msg_length = sizeof(char) * (obuf->len - tag_length - 1);
+
+                    // create final_msg which has length of original message - 2B for tag_length - tag_length B
+                    char *original_msg = pkg_malloc(original_msg_length);
+                    memcpy(original_msg, &(obuf->s[1 + tag_length]), original_msg_length);
+
+                    obuf->s = original_msg;
+                    obuf->len = original_msg_length;
+
+                    INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex_str(obuf));
 
                 } else {
                     INFO("DUAL_PROXY_MODE original RTP\n(changing RPT)\n");
@@ -371,36 +386,33 @@ int msg_received(void *data) {
                         }
                     }
 
-                    success = asprintf(
-                            &tag,
+                    char tag_s[src_endpoint->call_id->len + type->len + 1];
+                    sprintf(
+                            tag_s,
                             "%.*s:%.*s",
                             src_endpoint->call_id->len, src_endpoint->call_id->s,
                             type->len, type->s
                     );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
-                        goto done;
-                    }
+                    tag_s[src_endpoint->call_id->len + type->len + 1] = '\0';
 
                     // add byte for '\0' to length
-                    tag_length = sizeof(char) * (strlen(tag) + 1);
+                    tag_length = sizeof(char) * strlen(tag_s);
                     int original_length = obuf->len;
 
-                    INFO("DUAL_PROXY_MODE tag (%d): '%s'\n", tag_length, tag);
+                    INFO("DUAL_PROXY_MODE tag (%d): '%s'\n", tag_length, tag_s);
 
                     // 1B is for modified RTP/RTCP v3 header
-                    int modified_msg_length = 1 + tag_length + original_length;
+                    int modified_msg_length = 1 + tag_length + 1 + original_length;
                     char *modified_msg = pkg_malloc(sizeof(char) * modified_msg_length);
 
                     // set first byte to `bin(11xxxxxx)`
                     unsigned char changed_first_byte = first_byte | 0xc0;
-                    memcpy(modified_msg, &changed_first_byte, sizeof(char));
+                    memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
 
-                    memcpy(&(modified_msg[1]), &tag, tag_length);
+                    memcpy(&(modified_msg[1]), &tag_s, tag_length + 1);
 
                     // copy rest of the original message after the tag
-                    memcpy(&(modified_msg[1 + tag_length]), obuf->s, sizeof(char) * original_length);
+                    memcpy(&(modified_msg[2 + tag_length]), obuf->s, sizeof(char) * original_length);
 
                     obuf->s = modified_msg;
                     obuf->len = modified_msg_length;

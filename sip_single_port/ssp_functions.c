@@ -131,7 +131,7 @@ char * print_hex(char *str) {
     int i;
     char *buf = NULL;
 
-    for (i = 0; i < sizeof(str)/sizeof(char); i++) {
+    for (i = 0; i < strlen(str); i++) {
         if (buf == NULL) {
             asprintf(&buf, "%02x ", (unsigned int)(str[i] & 0xFF));
         } else {
