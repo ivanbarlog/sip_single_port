@@ -270,14 +270,14 @@ int find_endpoint_by_alias(alias_t *aliases, char *ip_port) {
 }
 
 int get_counter_port(const char *ip, str type, connection_t *connection, unsigned short *port) {
-    port = NULL;
+//    port = NULL;
     endpoint_t *counter_endpoint = NULL;
 
-    if (connection->request_endpoint_ip == ip) {
+    if (strcmp(connection->request_endpoint_ip, ip) == 0) {
         counter_endpoint = connection->response_endpoint;
     }
 
-    if (connection->response_endpoint_ip == ip) {
+    if (strcmp(connection->response_endpoint_ip, ip) == 0) {
         counter_endpoint = connection->request_endpoint;
     }
 

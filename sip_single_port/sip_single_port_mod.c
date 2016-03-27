@@ -314,11 +314,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    tag_length = strlen(tag);
-
-//                    sscanf((char *) &(obuf->s[3]), "%s", tag);
-
-                    INFO("\n\n\n>>> tag (%d): '%s'\n\n\n", tag_length, tag);
+                    tag_length = strlen(tag) + 1;
 
                     const char delim[2] = ":";
                     char *call_id, *media_type;
@@ -327,7 +323,6 @@ int msg_received(void *data) {
                     media_type = strtok(NULL, delim);
 
                     INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id, media_type, print_hex(media_type));
-                    goto done;
 
                     str* call_id_str = (str *) pkg_malloc(sizeof(str));
                     call_id_str->s = call_id;
@@ -343,12 +338,12 @@ int msg_received(void *data) {
                         goto done;
                     }
 
+                    INFO("%s == %s; %s\n", call_id, connection->call_id_raw, src_ip);
+
                     if (get_counter_port(src_ip, *type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
                         goto done;
                     }
-
-                    tag_length = strlen(tag) + 1;
 
                     int original_msg_length = sizeof(char) * (obuf->len - tag_length - 1);
 
