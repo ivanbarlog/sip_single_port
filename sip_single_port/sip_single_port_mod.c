@@ -107,6 +107,8 @@ static int mod_init(void) {
     return 0;
 }
 
+const char delim[2] = ":";
+
 int msg_received(void *data) {
     void **d = (void **) data;
     void *d1 = d[0];
@@ -139,6 +141,15 @@ int msg_received(void *data) {
     str call_id;
     int msg_type = get_msg_type(&msg);
 
+    int success;
+    char *src_ip = NULL;
+    char *tag = NULL;
+    str* type = NULL;
+    char *original_msg = NULL;
+    char *modified_msg = NULL;
+    char *call_id_c = NULL, *media_type_c = NULL;
+    str *call_id_str = NULL;
+
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
@@ -170,7 +181,6 @@ int msg_received(void *data) {
                     }
                 }
 
-                int success;
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
                     connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
                     if (connection->request_endpoint == NULL) {
@@ -240,9 +250,7 @@ int msg_received(void *data) {
             INFO("RTP/RTCP packet\n");
 
             struct receive_info *ri;
-            char *src_ip;
             unsigned short src_port, dst_port;
-            int success;
 
             ri = (struct receive_info *) d[2];
             src_port = ri->src_port;
@@ -267,8 +275,9 @@ int msg_received(void *data) {
             }
             endpoint_t *src_endpoint = dst_endpoint->sibling;
 
+            str *type = NULL;
+
             if (mode == SINGLE_PROXY_MODE) {
-                str *type = NULL;
                 if (msg_type == SSP_RTP_PACKET) {
                     if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
                         ERR("Cannot find stream with port '%d'\n", src_port);
@@ -294,13 +303,10 @@ int msg_received(void *data) {
                 int tag_length;
                 unsigned char first_byte = obuf->s[0];
 
-                char *tag;
-                str *type = NULL;
-
                 INFO("\n\n>>> Received obuf:\n\n%s\n\n", print_hex_str(obuf));
 
                 // the RTP/RTCP packet is already modified
-                if (!!(first_byte & BIT7) == 1 && !!(first_byte & BIT6) == 1) {
+                if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
                     success = asprintf(
@@ -316,21 +322,18 @@ int msg_received(void *data) {
 
                     tag_length = strlen(tag) + 1;
 
-                    const char delim[2] = ":";
-                    char *call_id, *media_type;
+                    call_id_c = strtok(tag, delim);
+                    media_type_c = strtok(NULL, delim);
 
-                    call_id = strtok(tag, delim);
-                    media_type = strtok(NULL, delim);
+                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_c, media_type_c, print_hex(media_type_c));
 
-                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id, media_type, print_hex(media_type));
+                    call_id_str = (str *) pkg_malloc(sizeof(str));
+                    call_id_str->s = call_id_c;
+                    call_id_str->len = strlen(call_id_c);
 
-                    str* call_id_str = (str *) pkg_malloc(sizeof(str));
-                    call_id_str->s = call_id;
-                    call_id_str->len = strlen(call_id);
-
-                    str* type = (str *) pkg_malloc(sizeof(str));
-                    type->s = media_type;
-                    type->len = strlen(media_type);
+                    type = (str *) pkg_malloc(sizeof(str));
+                    type->s = media_type_c;
+                    type->len = strlen(media_type_c);
 
                     connection_t *connection = NULL;
                     if (find_connection_by_call_id(*call_id_str, &connection) == -1) {
@@ -338,7 +341,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    INFO("%s == %s; %s\n", call_id, connection->call_id_raw, src_ip);
+                    INFO("%s == %s; %s\n", call_id_c, connection->call_id_raw, src_ip);
 
                     if (get_counter_port(src_ip, *type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
@@ -348,7 +351,7 @@ int msg_received(void *data) {
                     int original_msg_length = sizeof(char) * (obuf->len - tag_length - 1);
 
                     // create final_msg which has length of original message - 2B for tag_length - tag_length B
-                    char *original_msg = pkg_malloc(original_msg_length);
+                    original_msg = pkg_malloc(original_msg_length);
                     memcpy(original_msg, &(obuf->s[1 + tag_length]), original_msg_length);
 
                     obuf->s = original_msg;
@@ -398,7 +401,7 @@ int msg_received(void *data) {
 
                     // 1B is for modified RTP/RTCP v3 header
                     int modified_msg_length = 1 + tag_length + 1 + original_length;
-                    char *modified_msg = pkg_malloc(sizeof(char) * modified_msg_length);
+                    modified_msg = pkg_malloc(sizeof(char) * modified_msg_length);
 
                     // set first byte to `bin(11xxxxxx)`
                     unsigned char changed_first_byte = first_byte | 0xc0;
@@ -437,6 +440,37 @@ int msg_received(void *data) {
 
     done:
     free_sip_msg(&msg);
+    if (tag != NULL) {
+        // we need to use free instead of pkg_free since asprintf uses malloc
+        free(tag);
+    }
+    if (src_ip != NULL) {
+        // we need to use free instead of pkg_free since asprintf uses malloc
+        free(src_ip);
+    }
+//    if (call_id_c != NULL) {
+//        // we need to use free instead of pkg_free since strtok uses malloc
+//        free(call_id_c);
+//    }
+//    if (media_type_c != NULL) {
+//        // we need to use free instead of pkg_free since strtok uses malloc
+//        free(media_type_c);
+//    }
+    if (modified_msg != NULL) {
+        pkg_free(modified_msg);
+    }
+    if (original_msg != NULL) {
+        pkg_free(original_msg);
+    }
+    if (obuf != NULL) {
+        pkg_free(obuf);
+    }
+    if (call_id_str != NULL) {
+        pkg_free(call_id_str);
+    }
+    if (type != NULL) {
+        pkg_free(type);
+    }
 
     return 0;
 }
