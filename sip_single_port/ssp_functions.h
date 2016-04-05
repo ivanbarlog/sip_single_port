@@ -1,6 +1,7 @@
 #ifndef KAMAILIO_SSP_FUNCTIONS_H
 #define KAMAILIO_SSP_FUNCTIONS_H
 
+#define BIT7 0x80
 #define BIT6 0x40
 #define BIT5 0x20
 
@@ -49,5 +50,15 @@ int get_msg_body(struct sip_msg *msg, str *body);
 int str_to_char(str *value, char **new_value);
 
 int copy_str(str *value, char **new_value, str **copy);
+
+/**
+ * Returns hex representation string of the bytes in str
+ */
+char * print_hex_str(str *str);
+
+/**
+ * Returns hex representation string of the bytes in str
+ */
+char * print_hex(char *str);
 
 #endif //KAMAILIO_SSP_FUNCTIONS_H

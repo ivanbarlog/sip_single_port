@@ -269,6 +269,31 @@ int find_endpoint_by_alias(alias_t *aliases, char *ip_port) {
     return -1;
 }
 
+int get_counter_port(const char *ip, str type, connection_t *connection, unsigned short *port) {
+//    port = NULL;
+    endpoint_t *counter_endpoint = NULL;
+
+    if (strcmp(connection->request_endpoint_ip, ip) == 0) {
+        counter_endpoint = connection->response_endpoint;
+    }
+
+    if (strcmp(connection->response_endpoint_ip, ip) == 0) {
+        counter_endpoint = connection->request_endpoint;
+    }
+
+    if (counter_endpoint == NULL) {
+        ERR("counter endpoint not found\n");
+        return -1;
+    }
+
+    if (get_stream_port(counter_endpoint->streams, type, port) == -1) {
+        ERR("Cannot find counter part stream with type '%.*s'\n", type.len, type.s);
+        return -1;
+    }
+
+    return 0;
+}
+
 int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint) {
     *endpoint = NULL;
     char *ip_port;
