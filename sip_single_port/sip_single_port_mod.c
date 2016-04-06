@@ -170,7 +170,7 @@ int msg_received(void *data) {
 
             if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
-                endpoint = parse_endpoint(&msg, call_id);
+                endpoint = parse_endpoint(&msg);
                 if (endpoint == NULL) {
                     ERR("Cannot parse Endpoint\n");
                     goto done;
@@ -200,6 +200,7 @@ int msg_received(void *data) {
 
                     connection->request_endpoint = endpoint;
                     connection->request_endpoint_ip = &(endpoint->ip);
+                    endpoint->call_id = connection->call_id;
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
@@ -211,6 +212,7 @@ int msg_received(void *data) {
 
                     connection->response_endpoint = endpoint;
                     connection->response_endpoint_ip = &(endpoint->ip);
+                    endpoint->call_id = connection->call_id;
                 }
             }
 

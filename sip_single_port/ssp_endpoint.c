@@ -23,7 +23,7 @@ static int parse_creator_ip(sip_msg_t *msg, char **ip) {
     return 0;
 }
 
-endpoint_t *parse_endpoint(sip_msg_t *msg, str call_id) {
+endpoint_t *parse_endpoint(sip_msg_t *msg) {
     endpoint_t *endpoint;
     endpoint = pkg_malloc(sizeof(endpoint_t));
 
@@ -43,11 +43,6 @@ endpoint_t *parse_endpoint(sip_msg_t *msg, str call_id) {
 
     parse_creator_ip(msg, &endpoint->ip);
 
-    if (copy_str(&call_id, &(endpoint->call_id_raw), &(endpoint->call_id)) == -1) {
-        ERR("cannot allocate memory.\n");
-        return NULL;
-    }
-
     return endpoint;
 }
 
@@ -62,7 +57,6 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     char *result;
     char *endpoint_info;
-    char *call_id;
     char *streams_info;
     int success;
 
@@ -77,25 +71,13 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
         return NULL;
     }
 
-    success = asprintf(
-            &call_id,
-            "Call-ID: %.*s",
-            endpoint->call_id->len, endpoint->call_id->s
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return NULL;
-    }
-
     streams_info = print_endpoint_streams(endpoint->streams);
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n | %-39s |\n%s\n",
+            "%s\n | %-39s |\n | %-39s |\n",
             get_hdr_line(),
             endpoint_info,
-            call_id,
             streams_info
     );
 

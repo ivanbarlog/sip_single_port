@@ -76,11 +76,6 @@ char *print_connections_list();
 int find_connection_by_call_id(str call_id, connection_t **connection);
 
 /**
-<<<<<<< HEAD
- * Searches for connections where request_endpoint_ip:port or response_endpoint_ip:port
- * is equal to ip:port
- *
-=======
  * Searches provided connection for endpoint with provided IP,
  * then searches counter part endpoint for provided media_type and fills in port with the destination port
  * Returns 0 on success, -1 on fail
@@ -91,7 +86,6 @@ int get_counter_port(const char *ip, str type, connection_t *connection, unsigne
 /**
  * Searches for connections where request_endpoint_ip or response_endpoint_ip
  * is equal to ip or when same_ip is set to 1 it searches in aliases for IP:port
->>>>>>> 42e0b5f05da7886c5487268412980309f1eaa0f0
  * When connection is found function returns 0 and endpoint is set to
  * counter part endpoint eg. if request_endpoint_ip equals ip endpoint
  * is set to response_endpoint and vice versa
