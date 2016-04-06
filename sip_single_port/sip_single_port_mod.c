@@ -46,6 +46,8 @@
 #include "../../forward.h"
 #include "../../globals.h"
 
+#include "../../mem/shm_mem.h"
+
 #include "ssp_parse.h"
 #include "ssp_replace.h"
 #include "ssp_functions.h"
@@ -56,6 +58,11 @@
 
 
 MODULE_VERSION
+
+/**
+ * Head of connections list
+ */
+static connection_t *connections_list = NULL;
 
 /** module functions */
 static int mod_init(void);
@@ -99,6 +106,9 @@ static int mod_init(void) {
 
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
+
+    // allocate connections list
+    connections_list = (struct connection *) shm_malloc(sizeof(struct connection));
 
     #ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);

@@ -17,23 +17,28 @@ static int has_request_and_response_endpoints(connection_t *connection) {
     return 0;
 }
 
+void destroy_connection(connection_t *connection) {
+    if (connection->lock != NULL)
+        lock_dealloc(connection->lock);
+
+    // todo: destroy other properties
+
+
+    shm_free(connection);
+}
+
 connection_t *create_connection(str call_id) {
-    connection_t *connection;
-    connection = pkg_malloc(sizeof(connection_t));
+    connection_t *connection = (connection_t *) shm_malloc(sizeof(connection_t));
 
     if (connection == NULL) {
-        ERR("cannot allocate pkg memory");
-        return NULL;
-    }
-
-
-    if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
-        ERR("cannot allocate memory.\n");
+        ERR("cannot allocate shm memory");
         return NULL;
     }
 
     connection->next = NULL;
     connection->prev = NULL;
+    connection->call_id = NULL;
+    connection->call_id_raw = NULL;
     connection->request_endpoint = NULL;
     connection->response_endpoint = NULL;
     connection->request_endpoint_ip = NULL;
@@ -41,6 +46,24 @@ connection_t *create_connection(str call_id) {
     connection->same_ip = 0;
     connection->req_ip_alias = NULL;
     connection->res_ip_alias = NULL;
+    connection->lock = NULL;
+
+    connection->lock = lock_alloc();
+
+    if (connection->lock == NULL)
+    {
+        ERR("cannot allocate the lock\n");
+        destroy_connection(connection);
+
+        return NULL;
+    }
+
+    if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
+        ERR("cannot allocate memory.\n");
+        destroy_connection(connection);
+
+        return NULL;
+    }
 
     return connection;
 }

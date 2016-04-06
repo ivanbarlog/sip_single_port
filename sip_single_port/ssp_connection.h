@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include "../../str.h"
 #include "../../mem/mem.h"
+#include "../../mem/shm_mem.h"
+#include "../../locking.h"
 
 #include "ssp_endpoint.h"
 
@@ -15,7 +17,7 @@ typedef struct alias {
 } alias_t;
 
 typedef struct connection {
-    char *call_id_raw;
+    char *call_id_raw; // todo: to be removed
     str *call_id;
     char *request_endpoint_ip;
     char *response_endpoint_ip;
@@ -29,8 +31,18 @@ typedef struct connection {
     struct connection *prev;
     struct connection *next;
 
+    // lock for accessing connection from other kamailio processes
+    gen_lock_t *lock;
+
 } connection_t;
 
+
+/**
+ * Destroys connection by provided pointer
+ *
+ * Returns nothing
+ */
+void destroy_connection(connection_t *connection);
 
 /**
  * Initializes empty connection structure and assign
