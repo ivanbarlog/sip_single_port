@@ -37,12 +37,16 @@ connection_t *create_connection(str call_id) {
 
     connection->next = NULL;
     connection->prev = NULL;
+
     connection->call_id = NULL;
     connection->call_id_raw = NULL;
+
     connection->request_endpoint = NULL;
     connection->response_endpoint = NULL;
+
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
+
     connection->lock = NULL;
 
     connection->lock = lock_alloc();
@@ -135,8 +139,8 @@ char *print_connection(connection_t *connection) {
             "Request IP",
             "Response IP",
             get_line(1),
-            connection->request_endpoint_ip != NULL ? connection->request_endpoint_ip : "none",
-            connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none",
+            connection->request_endpoint_ip != NULL ? *(connection->request_endpoint_ip) : "none",
+            connection->response_endpoint_ip != NULL ? *(connection->response_endpoint_ip) : "none",
             get_line(0)
     );
 

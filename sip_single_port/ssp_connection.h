@@ -14,8 +14,9 @@
 typedef struct connection {
     char *call_id_raw; // todo: to be removed
     str *call_id;
-    char *request_endpoint_ip;
-    char *response_endpoint_ip;
+
+    char **request_endpoint_ip;
+    char **response_endpoint_ip;
 
     endpoint_t *request_endpoint;
     endpoint_t *response_endpoint;

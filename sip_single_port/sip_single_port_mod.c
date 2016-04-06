@@ -186,17 +186,7 @@ int msg_received(void *data) {
 
                     connection->request_endpoint = endpoint;
 
-                    success = asprintf(
-                            &(connection->request_endpoint_ip),
-                            "%s",
-                            endpoint->ip
-                    );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
-                        goto done;
-                    }
-
+                    connection->request_endpoint_ip = &(endpoint->ip);
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
@@ -207,17 +197,7 @@ int msg_received(void *data) {
                     }
 
                     connection->response_endpoint = endpoint;
-
-                    success = asprintf(
-                            &(connection->response_endpoint_ip),
-                            "%s",
-                            endpoint->ip
-                    );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
-                        goto done;
-                    }
+                    connection->response_endpoint_ip = &(endpoint->ip);
                 }
             }
 
