@@ -43,9 +43,6 @@ connection_t *create_connection(str call_id) {
     connection->response_endpoint = NULL;
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
-    connection->same_ip = 0;
-    connection->req_ip_alias = NULL;
-    connection->res_ip_alias = NULL;
     connection->lock = NULL;
 
     connection->lock = lock_alloc();
@@ -120,52 +117,6 @@ static char *get_line(int type) {
     return " +--------------------+--------------------+";
 }
 
-char *print_endpoint_aliases(alias_t *alias) {
-    char *result = NULL;
-    int success;
-
-    alias_t *current;
-    current = alias;
-
-    while (current != NULL) {
-        if (result == NULL) {
-            success = asprintf(
-                    &result,
-                    " | %-39s |",
-                    current->ip_port
-            );
-        } else {
-            success = asprintf(
-                    &result,
-                    "%s\n | %-39s |",
-                    result, current->ip_port
-            );
-        }
-
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return NULL;
-        }
-        current = current->next;
-    }
-
-    if (result == NULL) {
-        success = asprintf(
-                &result,
-                " | %-39s |",
-                "not initialized - IPs differ"
-        );
-
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return NULL;
-        }
-    }
-
-
-    return result;
-}
-
 char *print_connection(connection_t *connection) {
     char *result;
     char *connection_info;
@@ -175,7 +126,7 @@ char *print_connection(connection_t *connection) {
 
     success = asprintf(
             &connection_info,
-            "%s\n | %-39s |\n%s\n | %-39.*s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n | %-39s |\n%s\n%s\n%s\n | %-39s |\n%s\n%s\n%s\n",
+            "%s\n | %-39s |\n%s\n | %-39.*s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n",
             get_hdr_line(0),
             "Connection by Call-ID",
             get_line(0),
@@ -186,15 +137,7 @@ char *print_connection(connection_t *connection) {
             get_line(1),
             connection->request_endpoint_ip != NULL ? connection->request_endpoint_ip : "none",
             connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none",
-            get_line(0),
-            "Request aliases",
-            get_line(0),
-            print_endpoint_aliases(connection->req_ip_alias),
-            get_line(0),
-            "Response aliases",
-            get_line(0),
-            print_endpoint_aliases(connection->res_ip_alias),
-            get_line(1)
+            get_line(0)
     );
 
     if (success == -1) {
@@ -321,42 +264,23 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
          * Connection must have both request and response endpoints
          */
         if (has_request_and_response_endpoints(current) == 0) {
-            if (current->same_ip == 0) {
-                if (strcmp(current->request_endpoint->ip, ip) == 0) {
-                    *endpoint = current->response_endpoint;
-                    if (current->response_endpoint->sibling == NULL) {
-                        current->response_endpoint->sibling = current->request_endpoint;
-                    }
-
-                    return 0;
+            // todo here we should check also for port not just IP (traverse all ports)
+            if (strcmp(current->request_endpoint->ip, ip) == 0) {
+                *endpoint = current->response_endpoint;
+                if (current->response_endpoint->sibling == NULL) {
+                    current->response_endpoint->sibling = current->request_endpoint;
                 }
 
-                if (strcmp(current->response_endpoint->ip, ip) == 0) {
-                    *endpoint = current->request_endpoint;
-                    if (current->request_endpoint->sibling == NULL) {
-                        current->request_endpoint->sibling = current->response_endpoint;
-                    }
+                return 0;
+            }
 
-                    return 0;
-                }
-            } else {
-                if (find_endpoint_by_alias(current->req_ip_alias, ip_port) == 1) {
-                    *endpoint = current->response_endpoint;
-                    if (current->response_endpoint->sibling == NULL) {
-                        current->response_endpoint->sibling = current->request_endpoint;
-                    }
-
-                    return 0;
+            if (strcmp(current->response_endpoint->ip, ip) == 0) {
+                *endpoint = current->request_endpoint;
+                if (current->request_endpoint->sibling == NULL) {
+                    current->request_endpoint->sibling = current->response_endpoint;
                 }
 
-                if (find_endpoint_by_alias(current->res_ip_alias, ip_port) == 1) {
-                    *endpoint = current->request_endpoint;
-                    if (current->request_endpoint->sibling == NULL) {
-                        current->request_endpoint->sibling = current->response_endpoint;
-                    }
-
-                    return 0;
-                }
+                return 0;
             }
         }
 
@@ -397,106 +321,3 @@ int remove_connection(str call_id) {
     return -1;
 }
 
-int fill_in_aliases(connection_t *connection) {
-    add_aliases(connection->request_endpoint_ip, connection->request_endpoint, &(connection->req_ip_alias));
-    add_aliases(connection->response_endpoint_ip, connection->response_endpoint, &(connection->res_ip_alias));
-
-    return 0;
-}
-
-int add_aliases(char *ip, endpoint_t *endpoint, alias_t **aliases) {
-    char *rtcp;
-    int success;
-    endpoint_stream_t *current;
-    alias_t *head = NULL;
-    alias_t *current_alias = NULL;
-
-    current = endpoint->streams;
-
-    while (current != NULL) {
-        alias_t *tmp = NULL;
-
-        if (strcmp(current->port_raw, "0") == 0) {
-            INFO("skipping stream with not defined ports eg. RTP == 0\n");
-            current = current->next;
-            continue;
-        }
-
-        tmp = create_alias(ip, current->port_raw);
-
-        if (tmp == NULL) {
-            ERR("cannot create alias");
-            return -1;
-        }
-
-        if (head == NULL) {
-            head = tmp;
-            current_alias = head;
-        } else {
-            current_alias->next = tmp;
-            current_alias = current_alias->next;
-        }
-
-        if (current->rtcp_port->len == 0) {
-            success = asprintf(
-                    &rtcp,
-                    "%d",
-                    atoi(current->port_raw) + 1
-            );
-
-            if (success == -1) {
-                ERR("asprintf failed to allocate memory\n");
-                return -1;
-            }
-        } else {
-            rtcp = current->rtcp_port_raw;
-        }
-
-        tmp = create_alias(ip, rtcp);
-
-        if (tmp == NULL) {
-            ERR("cannot create alias");
-            return -1;
-        }
-
-        if (head == NULL) {
-            head = tmp;
-            current_alias = head;
-        } else {
-            current_alias->next = tmp;
-            current_alias = current_alias->next;
-        }
-
-        current = current->next;
-    }
-
-    *aliases = head;
-
-    return 0;
-}
-
-alias_t *create_alias(char *ip, char *port) {
-    int success;
-    alias_t *tmp_alias;
-
-    tmp_alias = pkg_malloc(sizeof(alias_t));
-    if (tmp_alias == NULL) {
-        ERR("cannot allocate pkg memory");
-        return NULL;
-    }
-
-    tmp_alias->next = NULL;
-
-    success = asprintf(
-            &(tmp_alias->ip_port),
-            "%s:%s",
-            ip, port
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return NULL;
-    }
-
-    return tmp_alias;
-}
