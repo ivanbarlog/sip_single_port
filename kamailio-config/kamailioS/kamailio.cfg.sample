@@ -1,7 +1,3 @@
-#!define WITH_MYSQL
-#!define WITH_USRLOCDB
-#!define WITH_DEBUG
-
 #!KAMAILIO
 #
 # Kamailio (OpenSER) SIP Server v4.3 - default configuration script
@@ -15,10 +11,10 @@
 #
 # Several features can be enabled using '#!define WITH_FEATURE' directives:
 #
-# *** To run in debug mode:
+# *** To run in debug mode: 
 #     - define WITH_DEBUG
 #
-# *** To enable mysql:
+# *** To enable mysql: 
 #     - define WITH_MYSQL
 #
 # *** To enable authentication execute:
@@ -142,7 +138,7 @@ import_file "kamailio-local.cfg"
 debug=4
 log_stderror=yes
 #!else
-debug=4
+debug=2
 log_stderror=no
 #!endif
 
@@ -151,7 +147,7 @@ memlog=5
 
 log_facility=LOG_LOCAL0
 
-fork=no
+fork=yes
 children=4
 
 /* uncomment the next line to disable TCP (default on) */
@@ -164,9 +160,9 @@ children=4
 /* add local domain aliases */
 #alias="sip.mydomain.com"
 
-/* uncomment and configure the following line if you want Kamailio to
+/* uncomment and configure the following line if you want Kamailio to 
    bind on a specific interface/port/proto (default bind on all available) */
-listen=udp:192.168.0.33:5060
+#listen=udp:10.0.0.10:5060
 
 /* port to listen to
  * - can be specified more than once if needed to listen on many ports */
@@ -241,7 +237,6 @@ loadmodule "cfg_rpc.so"
 loadmodule "mi_rpc.so"
 loadmodule "acc.so"
 
-
 #!ifdef WITH_AUTH
 loadmodule "auth.so"
 loadmodule "auth_db.so"
@@ -309,7 +304,7 @@ modparam("tm", "fr_inv_timer", 120000)
 
 # ----- rr params -----
 # set next param to 1 to add value to ;lr param (helps with some UAs)
-modparam("rr", "enable_full_lr", 1)
+modparam("rr", "enable_full_lr", 0)
 # do not append from tag to the RR (no need for this script)
 modparam("rr", "append_fromtag", 0)
 
@@ -338,7 +333,7 @@ modparam("acc", "detect_direction", 0)
 /* account triggers (flags) */
 modparam("acc", "log_flag", FLT_ACC)
 modparam("acc", "log_missed_flag", FLT_ACCMISSED)
-modparam("acc", "log_extra",
+modparam("acc", "log_extra", 
 	"src_user=$fU;src_domain=$fd;src_ip=$si;"
 	"dst_ouser=$tU;dst_user=$rU;dst_domain=$rd")
 modparam("acc", "failed_transaction_flag", FLT_ACCFAILED)
@@ -451,7 +446,7 @@ modparam("xmlrpc", "url_match", "^/RPC")
 
 #!ifdef WITH_DEBUG
 # ----- debugger params -----
-modparam("debugger", "cfgtrace", 0)
+modparam("debugger", "cfgtrace", 1)
 modparam("debugger", "log_level_name", "exec")
 #!endif
 
@@ -462,13 +457,6 @@ modparam("debugger", "log_level_name", "exec")
 # - processing of any incoming SIP request starts with this route
 # - note: this is the same as route { ... }
 request_route {
-
-	# if request is not for this kamailio forward it to another one
-	if (uri == NEXT_HOP_IP)
-	{
-		forward(NEXT_HOP_IP, NEXT_HOP_PORT);
-		exit;
-	}
 
 	# per request initial checks
 	route(REQINIT);
@@ -724,7 +712,7 @@ route[PRESENCE] {
 	}
 	exit;
 #!endif
-
+	
 	# if presence enabled, this part will not be executed
 	if (is_method("PUBLISH") || $rU==$null) {
 		sl_send_reply("404", "Not here");
@@ -926,12 +914,6 @@ branch_route[MANAGE_BRANCH] {
 # Manage incoming replies
 onreply_route[MANAGE_REPLY] {
 	xdbg("incoming reply\n");
-
-	# try to save location for REGISTER 200 OK
-	if (is_method("REGISTER") && status =~ "200") {
-		save("location");
-	}
-
 	if(status=~"[12][0-9][0-9]")
 		route(NATMANAGE);
 }
