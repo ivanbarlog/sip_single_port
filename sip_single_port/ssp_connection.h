@@ -11,11 +11,6 @@
 
 #include "ssp_endpoint.h"
 
-typedef struct alias {
-    char *ip_port;
-    struct alias *next;
-} alias_t;
-
 typedef struct connection {
     char *call_id_raw; // todo: to be removed
     str *call_id;
@@ -88,11 +83,6 @@ int find_connection_by_call_id(str call_id, connection_t **connection);
  * is set to response_endpoint and vice versa
  */
 int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint);
-
-/**
- * If ip_port is in aliases function returns 1 otherwise -1
- */
-int find_endpoint_by_alias(alias_t *aliases, char *ip_port);
 
 /**
  * Finds connection by call_id and removes it from connections list

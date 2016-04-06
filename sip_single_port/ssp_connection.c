@@ -220,21 +220,6 @@ int find_connection_by_call_id(str call_id, connection_t **connection) {
     return -1;
 }
 
-int find_endpoint_by_alias(alias_t *aliases, char *ip_port) {
-    alias_t *current_alias;
-    current_alias = aliases;
-
-    while (current_alias != NULL) {
-        if (strcmp(current_alias->ip_port, ip_port) == 0) {
-            return 1;
-        }
-
-        current_alias = current_alias->next;
-    }
-
-    return -1;
-}
-
 int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint) {
     *endpoint = NULL;
     char *ip_port;
