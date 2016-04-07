@@ -12,7 +12,7 @@
 #include "ssp_endpoint.h"
 
 typedef struct connection {
-    char *call_id_raw; // todo: to be removed
+    char *call_id_raw;
     str *call_id;
 
     char **request_endpoint_ip;
@@ -50,7 +50,7 @@ connection_t *create_connection(str call_id);
  * Pushes connection to connections list
  * Returns actual count of connections in connections list
  */
-int push_connection(connection_t *connection);
+int push_connection(connection_t *connection, connection_t **connection_list);
 
 /**
  * Returns string containing formatted connection structure

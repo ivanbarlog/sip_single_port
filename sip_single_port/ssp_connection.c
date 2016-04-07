@@ -21,6 +21,14 @@ void destroy_connection(connection_t *connection) {
     if (connection->lock != NULL)
         lock_dealloc(connection->lock);
 
+    if (connection->call_id_raw != NULL)
+        shm_free(connection->call_id_raw);
+
+    if (connection->call_id != NULL)
+        shm_free(connection->call_id);
+
+
+
     // todo: destroy other properties
 
 
@@ -38,8 +46,8 @@ connection_t *create_connection(str call_id) {
     connection->next = NULL;
     connection->prev = NULL;
 
-    connection->call_id = NULL;
     connection->call_id_raw = NULL;
+    connection->call_id = NULL;
 
     connection->request_endpoint = NULL;
     connection->response_endpoint = NULL;
@@ -59,6 +67,15 @@ connection_t *create_connection(str call_id) {
         return NULL;
     }
 
+    connection->call_id = (str *) shm_malloc(sizeof(str));
+
+    if (connection->call_id == NULL) {
+        ERR("cannot allocate shm memory.\n");
+        destroy_connection(connection);
+
+        return NULL;
+    }
+
     if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
         ERR("cannot allocate memory.\n");
         destroy_connection(connection);
@@ -69,7 +86,7 @@ connection_t *create_connection(str call_id) {
     return connection;
 }
 
-int push_connection(connection_t *connection) {
+int push_connection(connection_t *connection, connection_t **connection_list) {
     int ctr = 1;
     connection_t *tmp;
     tmp = connection;
@@ -78,13 +95,13 @@ int push_connection(connection_t *connection) {
      * If connections wasn't initialized yet
      * connection became root of connections
      */
-    if (connections == NULL) {
-        connections = tmp;
+    if (*connection_list == NULL) {
+        *connection_list = tmp;
         return ctr;
     }
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
 
     /**
      * Find last connection in list

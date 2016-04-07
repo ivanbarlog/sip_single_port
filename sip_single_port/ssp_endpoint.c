@@ -38,6 +38,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     }
 
     endpoint->sibling = NULL;
+
     endpoint->streams = NULL;
     parse_streams(msg, &endpoint->streams);
 
@@ -75,7 +76,7 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n | %-39s |\n",
+            "%s\n | %-39s |\n%s\n",
             get_hdr_line(),
             endpoint_info,
             streams_info

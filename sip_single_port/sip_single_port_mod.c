@@ -185,10 +185,8 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (push_connection(connection) == -1) {
-                        ERR("Cannot push connection to list\n");
-                        goto done;
-                    }
+                    int connections_count = push_connection(connection, &connections_list);
+                    DBG("%d. connection pushed to connections list\n", connections_count);
                 }
 
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
@@ -322,8 +320,6 @@ int msg_received(void *data) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
-
-                    INFO("%s == %s; %s\n", call_id_c, connection->call_id_raw, src_ip);
 
                     if (get_counter_port(src_ip, *type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");

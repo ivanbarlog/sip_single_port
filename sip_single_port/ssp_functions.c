@@ -76,18 +76,16 @@ int get_msg_body(struct sip_msg *msg, str *body) {
 }
 
 int str_to_char(str *value, char **new_value) {
-    int success;
 
-    success = asprintf(
-            new_value,
-            "%.*s",
-            value->len, value->s
-    );
+    *new_value = (char *) shm_malloc(sizeof(char) * (value->len + 1));
 
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
+    if (*new_value == NULL) {
+        ERR("cannot allocate shm memory");
         return -1;
     }
+
+    memcpy(new_value, &(value->s), value->len);
+    (*new_value)[value->len] = '\0';
 
     return 0;
 }
@@ -99,10 +97,10 @@ int copy_str(str *value, char **new_value, str **copy) {
         return -1;
     }
 
-    *copy = (str *) pkg_malloc(sizeof(str));
+    *copy = (str *) shm_malloc(sizeof(str));
 
     if (*copy == NULL) {
-        ERR("cannot allocate pkg memory");
+        ERR("cannot allocate shm memory");
         return -1;
     }
 
