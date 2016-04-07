@@ -1,20 +1,19 @@
 #include "ssp_stream.h"
 
 static void destroy_stream(endpoint_stream_t *stream) {
-    if (stream->media_raw != NULL)
-        shm_free(stream->media_raw);
+    if (stream->media != NULL)
+        shm_free(stream->media);
 
-    if (stream->port_raw != NULL)
-        shm_free(stream->port_raw);
+    if (stream->port != NULL)
+        shm_free(stream->port);
 
-    if (stream->rtcp_port_raw != NULL)
-        shm_free(stream->rtcp_port_raw);
+    if (stream->rtcp_port != NULL)
+        shm_free(stream->rtcp_port);
 
     // we don't need to free str properties
     // since they are just pointers and will be freed after whole stream is
 
-    if (stream != NULL)
-        shm_free(stream);
+    shm_free(stream);
 }
 
 void destroy_endpoint_streams(endpoint_stream_t **streams) {
@@ -50,29 +49,26 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
             }
 
             tmp->media = NULL;
-            tmp->media_raw = NULL;
             tmp->port = NULL;
-            tmp->port_raw = NULL;
             tmp->rtcp_port = NULL;
-            tmp->rtcp_port_raw = NULL;
             tmp->next = NULL;
 
-            if (copy_str(&(stc->media), &(tmp->media_raw), &(tmp->media)) == -1) {
-                ERR("cannot allocate memory.\n");
+            if (shm_copy_string(stc->media.s, stc->media.len, &(tmp->media)) == -1) {
+                ERR("cannot copy string.\n");
                 destroy_stream(tmp);
 
                 return -1;
             }
 
-            if (copy_str(&(stc->port), &(tmp->port_raw), &(tmp->port)) == -1) {
-                ERR("cannot allocate memory.\n");
+            if (shm_copy_string(stc->port.s, stc->port.len, &(tmp->port)) == -1) {
+                ERR("cannot copy string.\n");
                 destroy_stream(tmp);
 
                 return -1;
             }
 
-            if (copy_str(&(stc->rtcp_port), &(tmp->rtcp_port_raw), &(tmp->rtcp_port)) == -1) {
-                ERR("cannot allocate memory.\n");
+            if (shm_copy_string(stc->rtcp_port.s, stc->rtcp_port.len, &(tmp->rtcp_port)) == -1) {
+                ERR("cannot copy string.\n");
                 destroy_stream(tmp);
 
                 return -1;
@@ -112,9 +108,9 @@ char *print_stream(endpoint_stream_t *stream) {
     success = asprintf(
             &result,
             " | %-12s | %-10s | %-11s |\n%s\n",
-            stream->media->len != 0 ? stream->media_raw : "none",
-            stream->port->len != 0 ? stream->port_raw : "none",
-            stream->rtcp_port->len != 0 ? stream->rtcp_port_raw : "none",
+            stream->media != NULL ? stream->media : "none",
+            stream->port != NULL ? stream->port : "none",
+            stream->rtcp_port != NULL ? stream->rtcp_port : "none",
             get_line()
     );
 
@@ -178,31 +174,15 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
     return result;
 }
 
-int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type) {
-    char *str_rtp, *str_rtcp;
-    int success;
+int get_stream_type(endpoint_stream_t *streams, unsigned short port, char **type) {
 
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
-        success = asprintf(&str_rtp, "%.*s", current->port->len, current->port->s);
 
-        if (success == -1) {
-            ERR("asprintf cannot allocate memory\n");
-            return -1;
-        }
-
-        int rtp_port = atoi(str_rtp);
-
-        success = asprintf(&str_rtcp, "%.*s", current->rtcp_port->len, current->rtcp_port->s);
-
-        if (success == -1) {
-            ERR("asprintf cannot allocate memory\n");
-            return -1;
-        }
-
-        int rtcp_port = atoi(str_rtcp);
+        int rtp_port = atoi(current->port);
+        int rtcp_port = atoi(current->rtcp_port);
 
         if (rtp_port == port || rtcp_port == port) {
             *type = current->media;
@@ -217,23 +197,14 @@ int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type)
     return -1;
 }
 
-int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) {
-    char *str_port;
-    int success;
+int get_stream_port(endpoint_stream_t *streams, char *type, unsigned short *port) {
 
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
-        if (STR_EQ(*(current->media), type)) {
-            success = asprintf(&str_port, "%.*s", current->port->len, current->port->s);
-
-            if (success == -1) {
-                ERR("asprintf failed to allocate memory\n");
-                return -1;
-            }
-
-            *port = (unsigned int) atoi(str_port);
+        if (strcmp(current->media, type) == 0) {
+            *port = (unsigned int) atoi(current->port);
 
             return 0;
         }
@@ -241,36 +212,20 @@ int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port) 
         current = current->next;
     }
 
-    INFO("Cannot find stream with type '%.*s'\n", type.len, type.s);
+    INFO("Cannot find stream with type '%s'\n", type);
     return -1;
 }
 
-int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, str **type) {
-    char *str_port;
+int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, char **type) {
     unsigned int rtp_port, rtcp_port;
-    int success;
 
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
-        success = asprintf(&str_port, "%.*s", current->port->len, current->port->s);
 
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return -1;
-        }
-
-        rtp_port = (unsigned int) atoi(str_port);
-
-        success = asprintf(&str_port, "%.*s", current->rtcp_port->len, current->rtcp_port->s);
-
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return -1;
-        }
-
-        rtcp_port = (unsigned int) atoi(str_port);
+        rtp_port = (unsigned int) atoi(current->port);
+        rtcp_port = (unsigned int) atoi(current->rtcp_port);
 
         rtcp_port = rtcp_port == 0 ? rtp_port + 1 : rtcp_port;
 
@@ -287,7 +242,7 @@ int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, st
     return -1;
 }
 
-int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *port) {
+int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short *port) {
     char tmp;
     unsigned int rtcp_port;
     int success;
@@ -296,11 +251,11 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *p
     current = streams;
 
     while (current != NULL) {
-        if (STR_EQ(*(current->media), type)) {
-            success = sscanf(current->rtcp_port_raw, "%u %s", &rtcp_port, &tmp);
+        if (strcmp(current->media, type) == 0) {
+            success = sscanf(current->rtcp_port, "%u %s", &rtcp_port, &tmp);
 
             if (success == EOF || rtcp_port == 0) {
-                *port = (unsigned int) atoi(current->port_raw) + 1;
+                *port = (unsigned int) atoi(current->port) + 1;
             } else {
                 *port = rtcp_port;
             }
@@ -311,6 +266,6 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *p
         current = current->next;
     }
 
-    INFO("Cannot find stream with type '%.*s'\n", type.len, type.s);
+    INFO("Cannot find stream with type '%s'\n", type);
     return -1;
 }

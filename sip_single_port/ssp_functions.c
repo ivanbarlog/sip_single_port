@@ -75,6 +75,23 @@ int get_msg_body(struct sip_msg *msg, str *body) {
     return 0;
 }
 
+int shm_copy_string(char *original_string, int original_length, char **new_string) {
+    // allocate shared memory for new string
+    *new_string = (char *) shm_malloc(sizeof(char) * (original_length + 1));
+
+    if (*new_string == NULL) {
+        ERR("cannot allocate shm memory");
+        return -1;
+    }
+
+    // copy original string to new string
+    memcpy(new_string, &original_string, original_length + 1);
+    // end new string with null character
+    (*new_string)[original_length] = '\0';
+
+    return 0;
+}
+
 int str_to_char(str *value, char **new_value) {
 
     *new_value = (char *) shm_malloc(sizeof(char) * (value->len + 1));

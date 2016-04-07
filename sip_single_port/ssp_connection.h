@@ -12,8 +12,7 @@
 #include "ssp_endpoint.h"
 
 typedef struct connection {
-    char *call_id_raw;
-    str *call_id;
+    char *call_id;
 
     char **request_endpoint_ip;
     char **response_endpoint_ip;
@@ -81,7 +80,7 @@ int find_connection_by_call_id(str call_id, connection_t **connection, connectio
  * Returns 0 on success, -1 on fail
  * If port is not found *port is set to NULL
  */
-int get_counter_port(const char *ip, str type, connection_t *connection, unsigned short *port);
+int get_counter_port(const char *ip, char *type, connection_t *connection, unsigned short *port);
 
 /**
  * Searches for connections where request_endpoint_ip or response_endpoint_ip

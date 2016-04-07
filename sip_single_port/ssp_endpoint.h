@@ -23,7 +23,7 @@
  */
 typedef struct endpoint {
     char *ip;
-    str *call_id;
+    char *call_id;
 
     /* list of all media streams */
     struct endpoint_stream *streams;

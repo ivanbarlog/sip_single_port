@@ -16,9 +16,6 @@ void destroy_connection(connection_t *connection) {
     if (connection->lock != NULL)
         lock_dealloc(connection->lock);
 
-    if (connection->call_id_raw != NULL)
-        shm_free(connection->call_id_raw);
-
     if (connection->call_id != NULL)
         shm_free(connection->call_id);
 
@@ -32,8 +29,7 @@ void destroy_connection(connection_t *connection) {
     // we don't need to free next, prev, request and response endpoint IP
     // since they are just pointers and will be freed after whole connection is
 
-    if (connection != NULL)
-        shm_free(connection);
+    shm_free(connection);
 }
 
 connection_t *create_connection(str call_id) {
@@ -47,7 +43,6 @@ connection_t *create_connection(str call_id) {
     connection->next = NULL;
     connection->prev = NULL;
 
-    connection->call_id_raw = NULL;
     connection->call_id = NULL;
 
     connection->request_endpoint = NULL;
@@ -68,21 +63,9 @@ connection_t *create_connection(str call_id) {
         return NULL;
     }
 
-    connection->call_id = (str *) shm_malloc(sizeof(str));
+    shm_copy_string(call_id.s, call_id.len, &(connection->call_id));
 
-    if (connection->call_id == NULL) {
-        ERR("cannot allocate shm memory.\n");
-        destroy_connection(connection);
-
-        return NULL;
-    }
-
-    if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
-        ERR("cannot allocate memory.\n");
-        destroy_connection(connection);
-
-        return NULL;
-    }
+    DBG("\n\n\nDOPICE: %s\n\n\n", connection->call_id);
 
     return connection;
 }
@@ -148,17 +131,17 @@ char *print_connection(connection_t *connection) {
 
     success = asprintf(
             &connection_info,
-            "%s\n | %-39s |\n%s\n | %-39.*s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n",
+            "%s\n | %-39s |\n%s\n | %-39s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n",
             get_hdr_line(0),
             "Connection by Call-ID",
             get_line(0),
-            connection->call_id->len, connection->call_id->s,
+            connection->call_id,
             get_hdr_line(1),
             "Request IP",
             "Response IP",
             get_line(1),
-            connection->request_endpoint_ip != NULL ? *(connection->request_endpoint_ip) : "none",
-            connection->response_endpoint_ip != NULL ? *(connection->response_endpoint_ip) : "none",
+            /*connection->request_endpoint_ip != NULL ? *(connection->request_endpoint_ip) :*/ "none",
+            /*connection->response_endpoint_ip != NULL ? *(connection->response_endpoint_ip) :*/ "none",
             get_line(0)
     );
 
@@ -245,8 +228,13 @@ int find_connection_by_call_id(str call_id, connection_t **connection, connectio
     connection_t *current;
     current = *connection_list;
 
+    str tmp_call_id = {0, 0};
+
     while (current != NULL) {
-        if (STR_EQ(*(current->call_id), call_id) == 1) {
+        tmp_call_id.s = current->call_id;
+        tmp_call_id.len = strlen(current->call_id);
+
+        if (STR_EQ(tmp_call_id, call_id) == 1) {
             *connection = current;
             return 0;
         }
@@ -258,8 +246,8 @@ int find_connection_by_call_id(str call_id, connection_t **connection, connectio
     return -1;
 }
 
-int get_counter_port(const char *ip, str type, connection_t *connection, unsigned short *port) {
-//    port = NULL;
+int get_counter_port(const char *ip, char *type, connection_t *connection, unsigned short *port) {
+
     endpoint_t *counter_endpoint = NULL;
 
     if (strcmp(*(connection->request_endpoint_ip), ip) == 0) {
@@ -276,7 +264,7 @@ int get_counter_port(const char *ip, str type, connection_t *connection, unsigne
     }
 
     if (get_stream_port(counter_endpoint->streams, type, port) == -1) {
-        ERR("Cannot find counter part stream with type '%.*s'\n", type.len, type.s);
+        ERR("Cannot find counter part stream with type '%s'\n", type);
         return -1;
     }
 

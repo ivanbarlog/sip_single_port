@@ -154,7 +154,7 @@ int msg_received(void *data) {
     str* type = NULL;
     char *original_msg = NULL;
     char *modified_msg = NULL;
-    char *call_id_c = NULL, *media_type_c = NULL;
+    char *call_id_c = NULL;
     str *call_id_str = NULL;
 
     switch (msg_type) {
@@ -257,7 +257,7 @@ int msg_received(void *data) {
             }
             endpoint_t *src_endpoint = dst_endpoint->sibling;
 
-            str *type = NULL;
+            char *type = NULL;
 
             if (mode == SINGLE_PROXY_MODE) {
                 if (msg_type == SSP_RTP_PACKET) {
@@ -266,8 +266,8 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                        ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                    if (get_stream_port(dst_endpoint->streams, type, &dst_port) == -1) {
+                        ERR("Cannot find counter part stream with type '%s'\n", type);
                         goto done;
                     }
                 } else {
@@ -276,8 +276,8 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                        ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                    if (get_stream_rtcp_port(dst_endpoint->streams, type, &dst_port) == -1) {
+                        ERR("Cannot find counter part stream with type '%s'\n", type);
                         goto done;
                     }
                 }
@@ -305,17 +305,13 @@ int msg_received(void *data) {
                     tag_length = strlen(tag) + 1;
 
                     call_id_c = strtok(tag, delim);
-                    media_type_c = strtok(NULL, delim);
+                    type = strtok(NULL, delim);
 
-                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_c, media_type_c, print_hex(media_type_c));
+                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_c, type, print_hex(type));
 
                     call_id_str = (str *) pkg_malloc(sizeof(str));
                     call_id_str->s = call_id_c;
                     call_id_str->len = strlen(call_id_c);
-
-                    type = (str *) pkg_malloc(sizeof(str));
-                    type->s = media_type_c;
-                    type->len = strlen(media_type_c);
 
                     connection_t *connection = NULL;
                     if (find_connection_by_call_id(*call_id_str, &connection, &connections_list) == -1) {
@@ -323,7 +319,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (get_counter_port(src_ip, *type, connection, &dst_port) == -1) {
+                    if (get_counter_port(src_ip, type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
                         goto done;
                     }
@@ -348,8 +344,8 @@ int msg_received(void *data) {
                             goto done;
                         }
 
-                        if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                            ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                        if (get_stream_port(dst_endpoint->streams, type, &dst_port) == -1) {
+                            ERR("Cannot find counter part stream with type '%s'\n", type);
                             goto done;
                         }
                     } else {
@@ -358,20 +354,20 @@ int msg_received(void *data) {
                             goto done;
                         }
 
-                        if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                            ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
+                        if (get_stream_rtcp_port(dst_endpoint->streams, type, &dst_port) == -1) {
+                            ERR("Cannot find counter part stream with type '%s'\n", type);
                             goto done;
                         }
                     }
 
-                    char tag_s[src_endpoint->call_id->len + type->len + 1];
+                    char tag_s[strlen(src_endpoint->call_id) + strlen(type) + 1];
                     sprintf(
                             tag_s,
-                            "%.*s:%.*s",
-                            src_endpoint->call_id->len, src_endpoint->call_id->s,
-                            type->len, type->s
+                            "%s:%s",
+                            src_endpoint->call_id,
+                            type
                     );
-                    tag_s[src_endpoint->call_id->len + type->len + 1] = '\0';
+                    tag_s[strlen(src_endpoint->call_id) + strlen(type) + 1] = '\0';
 
                     // add byte for '\0' to length
                     tag_length = sizeof(char) * strlen(tag_s);
@@ -428,14 +424,6 @@ int msg_received(void *data) {
         // we need to use free instead of pkg_free since asprintf uses malloc
         free(src_ip);
     }
-//    if (call_id_c != NULL) {
-//        // we need to use free instead of pkg_free since strtok uses malloc
-//        free(call_id_c);
-//    }
-//    if (media_type_c != NULL) {
-//        // we need to use free instead of pkg_free since strtok uses malloc
-//        free(media_type_c);
-//    }
     if (modified_msg != NULL) {
         pkg_free(modified_msg);
     }
