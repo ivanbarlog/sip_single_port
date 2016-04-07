@@ -32,7 +32,8 @@ void destroy_connection(connection_t *connection) {
     // we don't need to free next, prev, request and response endpoint IP
     // since they are just pointers and will be freed after whole connection is
 
-    shm_free(connection);
+    if (connection != NULL)
+        shm_free(connection);
 }
 
 connection_t *create_connection(str call_id) {
@@ -139,10 +140,10 @@ static char *get_line(int type) {
 }
 
 char *print_connection(connection_t *connection) {
-    char *result;
-    char *connection_info;
-    char *request_endpoint_info;
-    char *response_endpoint_info;
+    char *result = NULL;
+    char *connection_info = NULL;
+    char *request_endpoint_info = NULL;
+    char *response_endpoint_info = NULL;
     int success;
 
     success = asprintf(
@@ -177,9 +178,14 @@ char *print_connection(connection_t *connection) {
             response_endpoint_info
     );
 
-    free(connection_info);
-    free(request_endpoint_info);
-    free(response_endpoint_info);
+    if (connection_info != NULL)
+        free(connection_info);
+
+    if (request_endpoint_info != NULL)
+        free(request_endpoint_info);
+
+    if (response_endpoint_info != NULL)
+        free(response_endpoint_info);
 
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");
@@ -193,7 +199,7 @@ char *print_connections_list(connection_t **connection_list) {
 
     if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
-        return "not initialized yet\n";
+        return NULL;
     }
 
     char *result = 0;
@@ -219,7 +225,8 @@ char *print_connections_list(connection_t **connection_list) {
             return NULL;
         }
 
-        free(connection_info);
+        if (connection_info != NULL)
+            free(connection_info);
 
         current = current->next;
     }

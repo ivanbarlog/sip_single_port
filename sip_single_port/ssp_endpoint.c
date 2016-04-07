@@ -14,7 +14,7 @@ static int parse_creator_ip(sip_msg_t *msg, char **ip) {
     creator = strstr(sdp.s, "c=IN IP4 ");
     sscanf(creator + 9, "%d.%d.%d.%d", &a, &b, &c, &d);
 
-    char *tmp_ip;
+    char *tmp_ip = NULL;
     success = asprintf(&tmp_ip, "%d.%d.%d.%d", a, b, c, d);
 
     if (success == -1) {
@@ -23,12 +23,14 @@ static int parse_creator_ip(sip_msg_t *msg, char **ip) {
     }
 
     // copy tmp_ip content to ip
+    // todo: extract to function for later reuse
     *ip = (char *) shm_malloc(sizeof(char) * (strlen(tmp_ip) + 1));
-    memcpy(ip, tmp_ip, strlen(tmp_ip));
-    ip[strlen(tmp_ip)] = '\0';
+    memcpy(ip, &tmp_ip, strlen(tmp_ip));
+    (*ip)[strlen(tmp_ip)] = '\0';
 
     // destroy dynamically allocated memory
-    free(tmp_ip);
+    if (tmp_ip != NULL)
+        free(tmp_ip);
 
     return 0;
 }
@@ -43,7 +45,8 @@ void destroy_endpoint(endpoint_t *endpoint) {
     // we don't need to free call_id and sibling
     // since they are just pointers and will be freed after whole endpoint is
 
-    shm_free(endpoint);
+    if (endpoint != NULL)
+        shm_free(endpoint);
 }
 
 endpoint_t *parse_endpoint(sip_msg_t *msg) {
@@ -89,12 +92,12 @@ static char *get_hdr_line() {
 
 char *print_endpoint(endpoint_t *endpoint, const char *label) {
     if (endpoint == NULL) {
-        return "";
+        return NULL;
     }
 
-    char *result;
-    char *endpoint_info;
-    char *streams_info;
+    char *result = NULL;
+    char *endpoint_info = NULL;
+    char *streams_info = NULL;
     int success;
 
     success = asprintf(
@@ -118,8 +121,11 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
             streams_info
     );
 
-    free(endpoint_info);
-    free(streams_info);
+    if (endpoint_info != NULL)
+        free(endpoint_info);
+
+    if (streams_info != NULL)
+        free(streams_info);
 
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");

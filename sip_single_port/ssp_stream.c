@@ -13,7 +13,8 @@ static void destroy_stream(endpoint_stream_t *stream) {
     // we don't need to free str properties
     // since they are just pointers and will be freed after whole stream is
 
-    shm_free(stream);
+    if (stream != NULL)
+        shm_free(stream);
 }
 
 void destroy_endpoint_streams(endpoint_stream_t **streams) {
@@ -129,7 +130,7 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
 
     if (streams == NULL) {
         ERR("streams list is not initialized\n");
-        return "";
+        return NULL;
     }
 
     char *result = 0;
@@ -163,7 +164,8 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
                 result, stream_info
         );
 
-        free(stream_info);
+        if (stream_info != NULL)
+            free(stream_info);
 
         if (success == -1) {
             ERR("asprintf failed to allocate memory\n");

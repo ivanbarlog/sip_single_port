@@ -107,9 +107,6 @@ static int mod_init(void) {
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-    // allocate connections list
-    connections_list = (struct connection *) shm_malloc(sizeof(struct connection));
-
     #ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
@@ -224,8 +221,10 @@ int msg_received(void *data) {
 
 
             char *cl_table = print_connections_list(&connections_list);
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table);
-            free(cl_table);
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+            if (cl_table != NULL)
+                free(cl_table);
 
             break;
         case SSP_RTP_PACKET: //no break
