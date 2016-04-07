@@ -145,7 +145,9 @@ int msg_received(void *data) {
     msg.buf = obuf->s;
     msg.len = obuf->len;
 
-    str call_id;
+    str call_id_str;
+    char *call_id = NULL;
+
     int msg_type = get_msg_type(&msg);
 
     int success;
@@ -154,16 +156,17 @@ int msg_received(void *data) {
     str* type = NULL;
     char *original_msg = NULL;
     char *modified_msg = NULL;
-    char *call_id_c = NULL;
-    str *call_id_str = NULL;
+
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
-            if (parse_call_id(&msg, &call_id) == -1) {
+            if (parse_call_id(&msg, &call_id_str) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
             }
+
+            shm_copy_string(call_id_str.s, call_id_str.len, &call_id);
 
             if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
@@ -304,17 +307,13 @@ int msg_received(void *data) {
 
                     tag_length = strlen(tag) + 1;
 
-                    call_id_c = strtok(tag, delim);
+                    call_id = strtok(tag, delim);
                     type = strtok(NULL, delim);
 
-                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_c, type, print_hex(type));
-
-                    call_id_str = (str *) pkg_malloc(sizeof(str));
-                    call_id_str->s = call_id_c;
-                    call_id_str->len = strlen(call_id_c);
+                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id, type, print_hex(type));
 
                     connection_t *connection = NULL;
-                    if (find_connection_by_call_id(*call_id_str, &connection, &connections_list) == -1) {
+                    if (find_connection_by_call_id(call_id, &connection, &connections_list) == -1) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
@@ -432,9 +431,6 @@ int msg_received(void *data) {
     }
     if (obuf != NULL) {
         pkg_free(obuf);
-    }
-    if (call_id_str != NULL) {
-        pkg_free(call_id_str);
     }
     if (type != NULL) {
         pkg_free(type);

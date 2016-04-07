@@ -32,7 +32,7 @@ void destroy_connection(connection_t *connection) {
     shm_free(connection);
 }
 
-connection_t *create_connection(str call_id) {
+connection_t *create_connection(char *call_id) {
     connection_t *connection = (connection_t *) shm_malloc(sizeof(connection_t));
 
     if (connection == NULL) {
@@ -63,7 +63,7 @@ connection_t *create_connection(str call_id) {
         return NULL;
     }
 
-    shm_copy_string(call_id.s, call_id.len, &(connection->call_id));
+    shm_copy_string(call_id, strlen(call_id), &(connection->call_id));
 
     DBG("\n\n\nDOPICE: %s\n\n\n", connection->call_id);
 
@@ -217,7 +217,7 @@ char *print_connections_list(connection_t **connection_list) {
     return result;
 }
 
-int find_connection_by_call_id(str call_id, connection_t **connection, connection_t **connection_list) {
+int find_connection_by_call_id(char *call_id, connection_t **connection, connection_t **connection_list) {
     *connection = NULL;
 
     if (*connection_list == NULL) {
@@ -228,21 +228,19 @@ int find_connection_by_call_id(str call_id, connection_t **connection, connectio
     connection_t *current;
     current = *connection_list;
 
-    str tmp_call_id = {0, 0};
-
     while (current != NULL) {
-        tmp_call_id.s = current->call_id;
-        tmp_call_id.len = strlen(current->call_id);
 
-        if (STR_EQ(tmp_call_id, call_id) == 1) {
+        if (strcmp(current->call_id, call_id) == 0) {
             *connection = current;
+
             return 0;
         }
 
         current = current->next;
     }
 
-    INFO("call id '%.*s' was not found in connections list\n", call_id.len, call_id.s);
+    INFO("call id '%s' was not found in connections list\n", call_id);
+
     return -1;
 }
 
@@ -314,7 +312,7 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
     return -1;
 }
 
-int remove_connection(str call_id, connection_t **connection_list) {
+int remove_connection(char *call_id, connection_t **connection_list) {
     connection_t *prev;
     connection_t *next;
     connection_t *connection = NULL;
@@ -340,6 +338,6 @@ int remove_connection(str call_id, connection_t **connection_list) {
         return 0;
     }
 
-    INFO("Connection with '%.*s' call id was not found.\n", call_id.len, call_id.s);
+    INFO("Connection with '%s' call id was not found.\n", call_id);
     return -1;
 }

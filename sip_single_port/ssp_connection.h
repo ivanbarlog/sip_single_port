@@ -43,7 +43,7 @@ void destroy_connection(connection_t *connection);
  * Returns 0 on success, -1 otherwise
  * On failure the connection is set to NULL
  */
-connection_t *create_connection(str call_id);
+connection_t *create_connection(char *call_id);
 
 /**
  * Pushes connection to connections list
@@ -72,7 +72,7 @@ char *print_connections_list(connection_t **connection_list);
  * Returns 0 on success, -1 on fail
  * If connection is not found *connection is set to NULL
  */
-int find_connection_by_call_id(str call_id, connection_t **connection, connection_t **connection_list);
+int find_connection_by_call_id(char *call_id, connection_t **connection, connection_t **connection_list);
 
 /**
  * Searches provided connection for endpoint with provided IP,
@@ -95,6 +95,6 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
  * Finds connection by call_id and removes it from connections list
  * Returns 0 on success otherwise -1
  */
-int remove_connection(str call_id, connection_t **connection_list);
+int remove_connection(char *call_id, connection_t **connection_list);
 
 #endif //KAMAILIO_SSP_CONNECTION_H
