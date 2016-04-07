@@ -23,9 +23,14 @@ void destroy_connection(connection_t *connection) {
         shm_free(connection->call_id);
 
 
+    if (connection->request_endpoint != NULL)
+        destroy_endpoint(connection->request_endpoint);
 
-    // todo: destroy other properties
+    if (connection->response_endpoint != NULL)
+        destroy_endpoint(connection->response_endpoint);
 
+    // we don't need to free next, prev, request and response endpoint IP
+    // since they are just pointers and will be freed after whole connection is
 
     shm_free(connection);
 }
@@ -172,6 +177,10 @@ char *print_connection(connection_t *connection) {
             response_endpoint_info
     );
 
+    free(connection_info);
+    free(request_endpoint_info);
+    free(response_endpoint_info);
+
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");
         return NULL;
@@ -193,18 +202,24 @@ char *print_connections_list(connection_t **connection_list) {
     connection_t *current;
     current = *connection_list;
 
+    char *connection_info = NULL;
+
     result = print_connection(current);
     while (current->next != NULL) {
+        connection_info = print_connection(current->next);
+
         success = asprintf(
                 &result,
                 "%s%s",
-                result, print_connection(current->next)
+                result, connection_info
         );
 
         if (success == -1) {
             ERR("asprintf failed to allocate memory\n");
             return NULL;
         }
+
+        free(connection_info);
 
         current = current->next;
     }

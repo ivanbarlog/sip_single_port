@@ -1,5 +1,35 @@
 #include "ssp_stream.h"
 
+static void destroy_stream(endpoint_stream_t *stream) {
+    if (stream->media_raw != NULL)
+        shm_free(stream->media_raw);
+
+    if (stream->port_raw != NULL)
+        shm_free(stream->port_raw);
+
+    if (stream->rtcp_port_raw != NULL)
+        shm_free(stream->rtcp_port_raw);
+
+    // we don't need to free str properties
+    // since they are just pointers and will be freed after whole stream is
+
+    shm_free(stream);
+}
+
+void destroy_endpoint_streams(endpoint_stream_t **streams) {
+
+    endpoint_stream_t *current = *streams;
+    endpoint_stream_t *next = NULL;
+
+    while (current->next != NULL) {
+        next = current->next;
+
+        destroy_stream(current);
+
+        current = next;
+    }
+}
+
 int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
     sdp_info_t *sdp_info = (sdp_info_t *) msg->body;
     endpoint_stream_t *head = NULL;
@@ -11,8 +41,7 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
         sdp_stream_cell_t *stc;
         stc = sec->streams;
         while (stc != NULL) {
-            endpoint_stream_t *tmp;
-            tmp = pkg_malloc(sizeof(endpoint_stream_t));
+            endpoint_stream_t *tmp = (endpoint_stream_t *) shm_malloc(sizeof(endpoint_stream_t));
 
             if (tmp == NULL) {
                 ERR("cannot allocate pkg memory\n");
@@ -29,16 +58,22 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
 
             if (copy_str(&(stc->media), &(tmp->media_raw), &(tmp->media)) == -1) {
                 ERR("cannot allocate memory.\n");
+                destroy_stream(tmp);
+
                 return -1;
             }
 
             if (copy_str(&(stc->port), &(tmp->port_raw), &(tmp->port)) == -1) {
                 ERR("cannot allocate memory.\n");
+                destroy_stream(tmp);
+
                 return -1;
             }
 
             if (copy_str(&(stc->rtcp_port), &(tmp->rtcp_port_raw), &(tmp->rtcp_port)) == -1) {
                 ERR("cannot allocate memory.\n");
+                destroy_stream(tmp);
+
                 return -1;
             }
 
@@ -117,12 +152,18 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
         return NULL;
     }
 
+    char *stream_info = NULL;
+
     while (current->next != NULL) {
+        stream_info = print_stream(current->next);
+
         success = asprintf(
                 &result,
                 "%s%s",
-                result, print_stream(current->next)
+                result, stream_info
         );
+
+        free(stream_info);
 
         if (success == -1) {
             ERR("asprintf failed to allocate memory\n");

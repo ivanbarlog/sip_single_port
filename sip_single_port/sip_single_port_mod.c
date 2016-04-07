@@ -222,7 +222,10 @@ int msg_received(void *data) {
                 remove_connection(call_id, &connections_list);
             }
 
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list(&connections_list));
+
+            char *cl_table = print_connections_list(&connections_list);
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table);
+            free(cl_table);
 
             break;
         case SSP_RTP_PACKET: //no break

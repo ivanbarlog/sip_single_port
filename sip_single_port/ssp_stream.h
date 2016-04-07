@@ -36,6 +36,11 @@ typedef struct endpoint_stream {
 } endpoint_stream_t;
 
 /**
+ * Frees memory allocated by endpoint streams
+ */
+void destroy_endpoint_streams(endpoint_stream_t **streams);
+
+/**
  * Parses streams from sdp_info
  * Function is used in parse_endpoint and streams should point
  * directly to endpoint_t streams field

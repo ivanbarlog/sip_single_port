@@ -33,6 +33,11 @@ typedef struct endpoint {
 } endpoint_t;
 
 /**
+ * Destroys endpoint and all memory associated with it
+ */
+void destroy_endpoint(endpoint_t *endpoint);
+
+/**
  * Parses endpoint from sip_msg structure
  * Returns 0 on success, -1 otherwise
  * If parsing fails endpoint is set to NULL
