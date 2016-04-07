@@ -1,10 +1,5 @@
 #include "ssp_connection.h"
 
-/**
- * Head of connections list
- */
-static connection_t *connections = NULL;
-
 static int has_request_and_response_endpoints(connection_t *connection) {
     if (connection->request_endpoint == NULL) {
         return -1;
@@ -185,9 +180,9 @@ char *print_connection(connection_t *connection) {
     return result;
 }
 
-char *print_connections_list() {
+char *print_connections_list(connection_t **connection_list) {
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return "not initialized yet\n";
     }
@@ -196,7 +191,7 @@ char *print_connections_list() {
     int success;
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
 
     result = print_connection(current);
     while (current->next != NULL) {
@@ -217,16 +212,16 @@ char *print_connections_list() {
     return result;
 }
 
-int find_connection_by_call_id(str call_id, connection_t **connection) {
+int find_connection_by_call_id(str call_id, connection_t **connection, connection_t **connection_list) {
     *connection = NULL;
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return -1;
     }
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
 
     while (current != NULL) {
         if (STR_EQ(*(current->call_id), call_id) == 1) {
@@ -266,29 +261,16 @@ int get_counter_port(const char *ip, str type, connection_t *connection, unsigne
     return 0;
 }
 
-int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint) {
+int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list) {
     *endpoint = NULL;
-    char *ip_port;
-    int success;
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return -1;
     }
 
     connection_t *current;
-    current = connections;
-
-    success = asprintf(
-            &ip_port,
-            "%s:%hu",
-            ip, port
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return -1;
-    }
+    current = *connection_list;
 
     while (current != NULL) {
         /*
@@ -322,19 +304,19 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
     return -1;
 }
 
-int remove_connection(str call_id) {
+int remove_connection(str call_id, connection_t **connection_list) {
     connection_t *prev;
     connection_t *next;
     connection_t *connection = NULL;
 
-    if (find_connection_by_call_id(call_id, &connection) == 0) {
+    if (find_connection_by_call_id(call_id, &connection, connection_list) == 0) {
         prev = connection->prev;
         next = connection->next;
 
         if (prev == NULL && next == NULL) {
-            connections = NULL;
+            *connection_list = NULL;
         } else if (prev == NULL) {
-            connections = next;
+            *connection_list = next;
             next->prev = NULL;
         } else if (next == NULL) {
             prev->next = NULL;
@@ -343,7 +325,7 @@ int remove_connection(str call_id) {
             next->prev = prev;
         }
 
-        pkg_free(connection);
+        destroy_connection(connection);
 
         return 0;
     }

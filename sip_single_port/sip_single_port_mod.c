@@ -177,7 +177,7 @@ int msg_received(void *data) {
                 }
 
                 connection_t *connection = NULL;
-                if (find_connection_by_call_id(call_id, &connection) == -1) {
+                if (find_connection_by_call_id(call_id, &connection, &connections_list) == -1) {
 
                     connection = create_connection(call_id);
                     if (connection == NULL) {
@@ -215,14 +215,14 @@ int msg_received(void *data) {
             }
 
             if (cancells_dialog(&msg) == 0) {
-                remove_connection(call_id);
+                remove_connection(call_id, &connections_list);
             }
 
             if (terminates_dialog(&msg) == 0) {
-                remove_connection(call_id);
+                remove_connection(call_id, &connections_list);
             }
 
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list(&connections_list));
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -249,7 +249,7 @@ int msg_received(void *data) {
             }
 
             endpoint_t *dst_endpoint = NULL;
-            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
+            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &connections_list) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }
@@ -316,7 +316,7 @@ int msg_received(void *data) {
                     type->len = strlen(media_type_c);
 
                     connection_t *connection = NULL;
-                    if (find_connection_by_call_id(*call_id_str, &connection) == -1) {
+                    if (find_connection_by_call_id(*call_id_str, &connection, &connections_list) == -1) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
