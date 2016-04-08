@@ -92,41 +92,6 @@ int shm_copy_string(const char *original_string, int original_length, char **new
     return 0;
 }
 
-int str_to_char(str *value, char **new_value) {
-
-    *new_value = (char *) shm_malloc(sizeof(char) * (value->len + 1));
-
-    if (*new_value == NULL) {
-        ERR("cannot allocate shm memory");
-        return -1;
-    }
-
-    memcpy(new_value, &(value->s), value->len);
-    (*new_value)[value->len] = '\0';
-
-    return 0;
-}
-
-int copy_str(str *value, char **new_value, str **copy) {
-
-    if (str_to_char(value, new_value) == -1) {
-        ERR("cannot allocate memory.\n");
-        return -1;
-    }
-
-    *copy = (str *) shm_malloc(sizeof(str));
-
-    if (*copy == NULL) {
-        ERR("cannot allocate shm memory");
-        return -1;
-    }
-
-    (*copy)->s = *new_value;
-    (*copy)->len = strlen(*new_value);
-
-    return 0;
-}
-
 char * print_hex_str(str *str) {
     int i;
     char *buf = NULL;

@@ -179,6 +179,7 @@ int msg_received(void *data) {
                 connection_t *connection = NULL;
                 if (find_connection_by_call_id(call_id, &connection, &connections_list) == -1) {
 
+                    // if connection was not found by Call-ID we'll create one
                     connection = create_connection(call_id);
                     if (connection == NULL) {
                         ERR("Cannot create connection.\n");
@@ -190,31 +191,23 @@ int msg_received(void *data) {
                 }
 
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
-                    connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
-                    if (connection->request_endpoint == NULL) {
-                        ERR("cannot allocate pkg memory");
-                        goto done;
-                    }
 
+                    // add endpoint to connection
                     connection->request_endpoint = endpoint;
                     connection->request_endpoint_ip = &(endpoint->ip);
                     endpoint->call_id = connection->call_id;
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
-                    connection->response_endpoint = pkg_malloc(sizeof(endpoint_t));
-                    if (connection->response_endpoint == NULL) {
-                        ERR("cannot allocate pkg memory");
-                        goto done;
-                    }
 
+                    // add endpoint to connection
                     connection->response_endpoint = endpoint;
                     connection->response_endpoint_ip = &(endpoint->ip);
                     endpoint->call_id = connection->call_id;
                 }
             }
 
-            if (cancells_dialog(&msg) == 0) {
+            if (cancels_dialog(&msg) == 0) {
                 remove_connection(call_id, &connections_list);
             }
 
@@ -415,26 +408,9 @@ int msg_received(void *data) {
 
     done:
     free_sip_msg(&msg);
-    if (tag != NULL) {
-        // we need to use free instead of pkg_free since asprintf uses malloc
-        free(tag);
-    }
-    if (src_ip != NULL) {
-        // we need to use free instead of pkg_free since asprintf uses malloc
-        free(src_ip);
-    }
-    if (modified_msg != NULL) {
-        pkg_free(modified_msg);
-    }
-    if (original_msg != NULL) {
-        pkg_free(original_msg);
-    }
-    if (obuf != NULL) {
-        pkg_free(obuf);
-    }
-    if (type != NULL) {
-        pkg_free(type);
-    }
+
+    if (call_id != NULL)
+        shm_free(call_id);
 
     return 0;
 }

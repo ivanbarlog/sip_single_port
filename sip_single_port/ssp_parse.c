@@ -52,7 +52,7 @@ int terminates_dialog(sip_msg_t *msg) {
     return -1;
 }
 
-int cancells_dialog(sip_msg_t *msg) {
+int cancels_dialog(sip_msg_t *msg) {
     if (parse_msg(msg->buf, msg->len, msg) == 0) {
 
         if (msg->first_line.type == SIP_REQUEST) {

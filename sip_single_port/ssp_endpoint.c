@@ -68,6 +68,9 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
 
     shm_copy_string(creator_ip, strlen(creator_ip), &(endpoint->ip));
 
+    // free memory used by creator_ip
+    free(creator_ip);
+
     if (parse_streams(msg, &endpoint->streams) != 0) {
         ERR("Cannot parse media data, destroying endpoint\n");
         destroy_endpoint(endpoint);
