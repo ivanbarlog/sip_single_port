@@ -147,13 +147,13 @@ int msg_received(void *data) {
 
     str call_id_str;
     char *call_id = NULL;
+    char *call_id_sys = NULL;
 
     int msg_type = get_msg_type(&msg);
 
     int success;
     char *src_ip = NULL;
     char *tag = NULL;
-    str* type = NULL;
     char *original_msg = NULL;
     char *modified_msg = NULL;
 
@@ -300,13 +300,13 @@ int msg_received(void *data) {
 
                     tag_length = strlen(tag) + 1;
 
-                    call_id = strtok(tag, delim);
+                    call_id_sys = strtok(tag, delim);
                     type = strtok(NULL, delim);
 
-                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id, type, print_hex(type));
+                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_sys, type, print_hex(type));
 
                     connection_t *connection = NULL;
-                    if (find_connection_by_call_id(call_id, &connection, &connections_list) == -1) {
+                    if (find_connection_by_call_id(call_id_sys, &connection, &connections_list) == -1) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
@@ -412,6 +412,9 @@ int msg_received(void *data) {
     if (call_id != NULL)
         shm_free(call_id);
 
+    if (call_id_sys != NULL)
+        free(call_id_sys);
+
     return 0;
 }
 
@@ -425,10 +428,12 @@ int msg_sent(void *data) {
     msg.len = obuf->len;
 
     if (skip_media_changes(&msg) == -1) {
+        DBG("Skipping SDP changes.");
         goto done;
     }
 
     if (change_media_ports(&msg, bind_address) == -1) {
+        ERR("Changing SDP failed.");
         goto done;
     }
 
