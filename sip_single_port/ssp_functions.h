@@ -43,7 +43,7 @@ int parse_call_id(sip_msg_t *msg, str *call_id);
  */
 int get_msg_body(struct sip_msg *msg, str *body);
 
-int shm_copy_string(char *original_string, int original_length, char **new_string);
+int shm_copy_string(const char *original_string, int original_length, char **new_string);
 
 /**
  * Changes dynamic str structure to char array
