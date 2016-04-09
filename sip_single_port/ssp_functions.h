@@ -55,9 +55,4 @@ int shm_copy_string(const char *original_string, int original_length, char **new
  */
 int pkg_copy_string(const char *original_string, int original_length, char **new_string);
 
-/**
- * Returns hex representation string of the bytes in str
- */
-char *print_hex_str(str *str);
-
 #endif //KAMAILIO_SSP_FUNCTIONS_H

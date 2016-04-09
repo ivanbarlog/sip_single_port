@@ -108,25 +108,3 @@ int pkg_copy_string(const char *original_string, int original_length, char **new
 
     return 0;
 }
-
-// warning - this does not free memory and it's usage is only for debugging purposes
-char *print_hex_str(str *str) {
-    int i;
-    char *buf = NULL;
-    char *tmp = NULL;
-
-    for (i = 0; i < str->len; i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
-        } else {
-            tmp = buf;
-            free(buf);
-            asprintf(&buf, "%s%02x ", tmp, (unsigned int)(str->s[i] & 0xFF));
-        }
-    }
-
-    if (tmp != NULL)
-        free(tmp);
-
-    return buf;
-}
