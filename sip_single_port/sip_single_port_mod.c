@@ -240,33 +240,20 @@ int msg_received(void *data) {
             }
             endpoint_t *src_endpoint = dst_endpoint->sibling;
 
-            char *type = NULL;
-
             if (mode == SINGLE_PROXY_MODE) {
-                if (msg_type == SSP_RTP_PACKET) {
-                    if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
-                        ERR("Cannot find stream with port '%d'\n", src_port);
-                        goto done;
-                    }
 
-                    if (get_stream_port(dst_endpoint->streams, type, &dst_port) == -1) {
-                        ERR("Cannot find counter part stream with type '%s'\n", type);
-                        goto done;
-                    }
-                } else {
-                    if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
-                        ERR("Cannot find stream with port '%d'\n", src_port);
-                        goto done;
-                    }
+                if (spm_find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port) == -1) {
+                    ERR("Cannot find destination port where the packet should be forwarded.\n");
 
-                    if (get_stream_rtcp_port(dst_endpoint->streams, type, &dst_port) == -1) {
-                        ERR("Cannot find counter part stream with type '%s'\n", type);
-                        goto done;
-                    }
+                    goto done;
                 }
+
             } else if (mode == DUAL_PROXY_MODE) {
+
                 int tag_length;
                 unsigned char first_byte = obuf->s[0];
+
+                char *type = NULL;
 
                 INFO("\n\n>>> Received obuf:\n\n%s\n\n", print_hex_str(obuf));
 

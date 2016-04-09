@@ -23,4 +23,10 @@ int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip);
  */
 void set_src_ip_and_port(char *ip, unsigned short *port, struct receive_info *ri);
 
+/**
+ * Single-proxy mode - find destination port based on message type
+ */
+int spm_find_dst_port(int msg_type, endpoint_t *src_endpoint, endpoint_t *dst_endpoint, unsigned short src_port, unsigned short *dst_port);
+
+
 #endif //KAMAILIO_SSP_MEDIA_FORWARD_H

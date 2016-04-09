@@ -33,3 +33,51 @@ void set_src_ip_and_port(char *ip, unsigned short *port, struct receive_info *ri
     );
 
 }
+
+int spm_find_dst_port(
+        int msg_type,
+        endpoint_t *src_endpoint,
+        endpoint_t *dst_endpoint,
+        unsigned short src_port,
+        unsigned short *dst_port
+) {
+
+    char *type = NULL;
+
+    switch (msg_type) {
+        case SSP_RTP_PACKET:
+            if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
+                ERR("Cannot find stream with port '%d'\n", src_port);
+
+                return -1;
+            }
+
+            if (get_stream_port(dst_endpoint->streams, type, dst_port) == -1) {
+                ERR("Cannot find counter part stream with type '%s'\n", type);
+
+                return -1;
+            }
+
+            return 0;
+
+        case SSP_RTCP_PACKET:
+            if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
+                ERR("Cannot find stream with port '%d'\n", src_port);
+
+                return -1;
+            }
+
+            if (get_stream_rtcp_port(dst_endpoint->streams, type, dst_port) == -1) {
+                ERR("Cannot find counter part stream with type '%s'\n", type);
+
+                return -1;
+            }
+
+            return 0;
+
+        default:
+            ERR("Unknown message type (%d)\n", msg_type);
+
+            return -1;
+    }
+}
