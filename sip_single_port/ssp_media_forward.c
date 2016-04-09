@@ -173,8 +173,6 @@ int tag_message(str *obuf, char *call_id, char *media_type) {
     obuf->s = modified_msg;
     obuf->len = modified_msg_length;
 
-    DBG("Modified message (hex):\n%s\n", print_hex_str(obuf));
-
     return 0;
 }
 
@@ -194,12 +192,8 @@ int remove_tag(str *obuf, int tag_length) {
 
     memcpy(original_msg, &(obuf->s[1 + tag_length]), original_msg_length);
 
-    // todo: here is probably place where original obuf should be freed
-
     obuf->s = original_msg;
     obuf->len = original_msg_length;
-
-    DBG("Original message (hex):\n%s\n", print_hex_str(obuf));
 
     return 0;
 }

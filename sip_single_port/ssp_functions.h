@@ -7,6 +7,8 @@
 
 #define _GNU_SOURCE //allows us to use asprintf
 
+#include <stdlib.h>
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../../parser/msg_parser.h"
