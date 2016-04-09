@@ -49,13 +49,13 @@ int get_msg_body(struct sip_msg *msg, str *body);
 int shm_copy_string(const char *original_string, int original_length, char **new_string);
 
 /**
- * Returns hex representation string of the bytes in str
+ * Copies string from original_string to newly allocated pkg memory
  */
-char * print_hex_str(str *str);
+int pkg_copy_string(const char *original_string, int original_length, char **new_string);
 
 /**
  * Returns hex representation string of the bytes in str
  */
-char * print_hex(char *str);
+char *print_hex_str(str *str);
 
 #endif //KAMAILIO_SSP_FUNCTIONS_H

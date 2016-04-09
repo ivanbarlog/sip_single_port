@@ -92,7 +92,24 @@ int shm_copy_string(const char *original_string, int original_length, char **new
     return 0;
 }
 
-char * print_hex_str(str *str) {
+int pkg_copy_string(const char *original_string, int original_length, char **new_string) {
+    // allocate shared memory for new string
+    *new_string = (char *) pkg_malloc(sizeof(char) * (original_length + 1));
+
+    if (*new_string == NULL) {
+        ERR("cannot allocate pkg memory");
+        return -1;
+    }
+
+    // copy original string to new string
+    memcpy(*new_string, original_string, original_length);
+    // end new string with null character
+    (*new_string)[original_length] = '\0';
+
+    return 0;
+}
+
+char *print_hex_str(str *str) {
     int i;
     char *buf = NULL;
 
@@ -101,21 +118,6 @@ char * print_hex_str(str *str) {
             asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
         } else {
             asprintf(&buf, "%s%02x ", buf, (unsigned int)(str->s[i] & 0xFF));
-        }
-    }
-
-    return buf;
-}
-
-char * print_hex(char *str) {
-    int i;
-    char *buf = NULL;
-
-    for (i = 0; i < strlen(str); i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str[i] & 0xFF));
-        } else {
-            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str[i] & 0xFF));
         }
     }
 

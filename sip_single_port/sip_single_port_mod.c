@@ -114,8 +114,6 @@ static int mod_init(void) {
     return 0;
 }
 
-const char delim[2] = ":";
-
 int msg_received(void *data) {
     void **d = (void **) data;
     void *d1 = d[0];
@@ -145,27 +143,24 @@ int msg_received(void *data) {
     msg.buf = obuf->s;
     msg.len = obuf->len;
 
-    str call_id_str;
-    char *call_id = NULL;
-    char *call_id_sys = NULL;
+    str str_call_id;
+    char *shm_call_id = NULL;
+    char *pkg_call_id = NULL;
+    char *pkg_media_type = NULL;
 
     int msg_type = get_msg_type(&msg);
 
-    int success;
-    char *tag = NULL;
-    char *original_msg = NULL;
-    char *modified_msg = NULL;
-
+    int pkg_obuf = 0;
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
-            if (parse_call_id(&msg, &call_id_str) == -1) {
+            if (parse_call_id(&msg, &str_call_id) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
             }
 
-            shm_copy_string(call_id_str.s, call_id_str.len, &call_id);
+            shm_copy_string(str_call_id.s, str_call_id.len, &shm_call_id);
 
             if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
@@ -176,10 +171,10 @@ int msg_received(void *data) {
                 }
 
                 connection_t *connection = NULL;
-                if (find_connection_by_call_id(call_id, &connection, &connections_list) == -1) {
+                if (find_connection_by_call_id(shm_call_id, &connection, &connections_list) == -1) {
 
                     // if connection was not found by Call-ID we'll create one
-                    connection = create_connection(call_id);
+                    connection = create_connection(shm_call_id);
                     if (connection == NULL) {
                         ERR("Cannot create connection.\n");
                         goto done;
@@ -207,11 +202,11 @@ int msg_received(void *data) {
             }
 
             if (cancels_dialog(&msg) == 0) {
-                remove_connection(call_id, &connections_list);
+                remove_connection(shm_call_id, &connections_list);
             }
 
             if (terminates_dialog(&msg) == 0) {
-                remove_connection(call_id, &connections_list);
+                remove_connection(shm_call_id, &connections_list);
             }
 
 
@@ -228,6 +223,7 @@ int msg_received(void *data) {
 
             char src_ip[16];
             unsigned short src_port, dst_port;
+            char *media_type;
 
             struct receive_info *ri = (struct receive_info *) d[2];
 
@@ -242,9 +238,8 @@ int msg_received(void *data) {
 
             if (mode == SINGLE_PROXY_MODE) {
 
-                if (spm_find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port) == -1) {
+                if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
                     ERR("Cannot find destination port where the packet should be forwarded.\n");
-
                     goto done;
                 }
 
@@ -253,112 +248,45 @@ int msg_received(void *data) {
                 int tag_length;
                 unsigned char first_byte = obuf->s[0];
 
-                char *type = NULL;
-
-                INFO("\n\n>>> Received obuf:\n\n%s\n\n", print_hex_str(obuf));
-
                 // the RTP/RTCP packet is already modified
                 if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
-                    success = asprintf(
-                            &tag,
-                            "%s",
-                            &(obuf->s[1])
-                    );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
+                    if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
+                        ERR("Cannot parse tagged message.");
                         goto done;
                     }
 
-                    tag_length = strlen(tag) + 1;
-
-                    call_id_sys = strtok(tag, delim);
-                    type = strtok(NULL, delim);
-
-                    INFO("\n\n\n>>> call_id: %s, media_type: %s\nhex: %s\n\n\n", call_id_sys, type, print_hex(type));
-
-                    connection_t *connection = NULL;
-                    if (find_connection_by_call_id(call_id_sys, &connection, &connections_list) == -1) {
+                    connection_t *connection;
+                    if (find_connection_by_call_id(pkg_call_id, &connection, &connections_list) == -1) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
 
-                    if (get_counter_port(src_ip, type, connection, &dst_port) == -1) {
+                    if (get_counter_port(src_ip, pkg_media_type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
                         goto done;
                     }
 
-                    int original_msg_length = sizeof(char) * (obuf->len - tag_length - 1);
-
-                    // create final_msg which has length of original message - 2B for tag_length - tag_length B
-                    original_msg = pkg_malloc(original_msg_length);
-                    memcpy(original_msg, &(obuf->s[1 + tag_length]), original_msg_length);
-
-                    obuf->s = original_msg;
-                    obuf->len = original_msg_length;
-
-                    INFO("\n\n>>> Original obuf:\n\n%s\n\n", print_hex_str(obuf));
-
-                } else {
-                    INFO("DUAL_PROXY_MODE original RTP\n(changing RPT)\n");
-
-                    if (msg_type == SSP_RTP_PACKET) {
-                        if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
-                            ERR("Cannot find stream with port '%d'\n", src_port);
-                            goto done;
-                        }
-
-                        if (get_stream_port(dst_endpoint->streams, type, &dst_port) == -1) {
-                            ERR("Cannot find counter part stream with type '%s'\n", type);
-                            goto done;
-                        }
-                    } else {
-                        if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
-                            ERR("Cannot find stream with port '%d'\n", src_port);
-                            goto done;
-                        }
-
-                        if (get_stream_rtcp_port(dst_endpoint->streams, type, &dst_port) == -1) {
-                            ERR("Cannot find counter part stream with type '%s'\n", type);
-                            goto done;
-                        }
+                    if (remove_tag(obuf, tag_length) == -1) {
+                        ERR("Cannot remove tag from tagged message.\n");
+                        goto done;
                     }
 
-                    char tag_s[strlen(src_endpoint->call_id) + strlen(type) + 1];
-                    sprintf(
-                            tag_s,
-                            "%s:%s",
-                            src_endpoint->call_id,
-                            type
-                    );
-                    tag_s[strlen(src_endpoint->call_id) + strlen(type) + 1] = '\0';
+                } else { // RTP/RTCP packet is not modified yet so we are about to tag it
 
-                    // add byte for '\0' to length
-                    tag_length = sizeof(char) * strlen(tag_s);
-                    int original_length = obuf->len;
+                    if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
+                        ERR("Cannot find destination port where the packet should be forwarded.\n");
+                        goto done;
+                    }
 
-                    INFO("DUAL_PROXY_MODE tag (%d): '%s'\n", tag_length, tag_s);
-
-                    // 1B is for modified RTP/RTCP v3 header
-                    int modified_msg_length = 1 + tag_length + 1 + original_length;
-                    modified_msg = pkg_malloc(sizeof(char) * modified_msg_length);
-
-                    // set first byte to `bin(11xxxxxx)`
-                    unsigned char changed_first_byte = first_byte | 0xc0;
-                    memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
-
-                    memcpy(&(modified_msg[1]), &tag_s, tag_length + 1);
-
-                    // copy rest of the original message after the tag
-                    memcpy(&(modified_msg[2 + tag_length]), obuf->s, sizeof(char) * original_length);
-
-                    obuf->s = modified_msg;
-                    obuf->len = modified_msg_length;
-
-                    INFO("\n\n>>> Modified obuf:\n\n%s\n\n", print_hex_str(obuf));
+                    if (tag_message(obuf, src_endpoint->call_id, media_type) == -1) {
+                        ERR("Cannot tag message.\n");
+                        goto done;
+                    }
                 }
+
+                pkg_obuf = 1;
 
             } else {
                 ERR("Unknown sip_single_port mode\n");
@@ -375,6 +303,10 @@ int msg_received(void *data) {
                 INFO("RTP packet sent successfully!\n");
             }
 
+            // when obuf is pointing to pkg memory allocated by us we'll free it
+            if (pkg_obuf == 1 && obuf->s != NULL)
+                pkg_free(obuf->s);
+
             break;
         default:
             goto done;
@@ -383,11 +315,17 @@ int msg_received(void *data) {
     done:
     free_sip_msg(&msg);
 
-    if (call_id != NULL)
-        shm_free(call_id);
+    if (shm_call_id != NULL)
+        shm_free(shm_call_id);
 
-    if (call_id_sys != NULL)
-        free(call_id_sys);
+    if (pkg_call_id != NULL)
+        pkg_free(pkg_call_id);
+
+    if (pkg_media_type != NULL)
+        pkg_free(pkg_media_type);
+
+    if (obuf != NULL)
+        pkg_free(obuf);
 
     return 0;
 }
