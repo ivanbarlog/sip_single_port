@@ -23,8 +23,7 @@
  */
 typedef struct endpoint {
     char *ip;
-    char *call_id_raw;
-    str *call_id;
+    char *call_id;
 
     /* list of all media streams */
     struct endpoint_stream *streams;
@@ -34,11 +33,16 @@ typedef struct endpoint {
 } endpoint_t;
 
 /**
+ * Destroys endpoint and all memory associated with it
+ */
+void destroy_endpoint(endpoint_t *endpoint);
+
+/**
  * Parses endpoint from sip_msg structure
  * Returns 0 on success, -1 otherwise
  * If parsing fails endpoint is set to NULL
  */
-endpoint_t *parse_endpoint(sip_msg_t *msg, str call_id);
+endpoint_t *parse_endpoint(sip_msg_t *msg);
 
 /**
  * Returns string containing formatted endpoint structure

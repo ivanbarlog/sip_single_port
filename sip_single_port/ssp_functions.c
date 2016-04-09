@@ -75,69 +75,36 @@ int get_msg_body(struct sip_msg *msg, str *body) {
     return 0;
 }
 
-int str_to_char(str *value, char **new_value) {
-    int success;
+int shm_copy_string(const char *original_string, int original_length, char **new_string) {
+    // allocate shared memory for new string
+    *new_string = (char *) shm_malloc(sizeof(char) * (original_length + 1));
 
-    success = asprintf(
-            new_value,
-            "%.*s",
-            value->len, value->s
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
+    if (*new_string == NULL) {
+        ERR("cannot allocate shm memory");
         return -1;
     }
+
+    // copy original string to new string
+    memcpy(*new_string, original_string, original_length);
+    // end new string with null character
+    (*new_string)[original_length] = '\0';
 
     return 0;
 }
 
-int copy_str(str *value, char **new_value, str **copy) {
+int pkg_copy_string(const char *original_string, int original_length, char **new_string) {
+    // allocate shared memory for new string
+    *new_string = (char *) pkg_malloc(sizeof(char) * (original_length + 1));
 
-    if (str_to_char(value, new_value) == -1) {
-        ERR("cannot allocate memory.\n");
-        return -1;
-    }
-
-    *copy = (str *) pkg_malloc(sizeof(str));
-
-    if (*copy == NULL) {
+    if (*new_string == NULL) {
         ERR("cannot allocate pkg memory");
         return -1;
     }
 
-    (*copy)->s = *new_value;
-    (*copy)->len = strlen(*new_value);
+    // copy original string to new string
+    memcpy(*new_string, original_string, original_length);
+    // end new string with null character
+    (*new_string)[original_length] = '\0';
 
     return 0;
-}
-
-char * print_hex_str(str *str) {
-    int i;
-    char *buf = NULL;
-
-    for (i = 0; i < str->len; i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str->s[i] & 0xFF));
-        } else {
-            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str->s[i] & 0xFF));
-        }
-    }
-
-    return buf;
-}
-
-char * print_hex(char *str) {
-    int i;
-    char *buf = NULL;
-
-    for (i = 0; i < strlen(str); i++) {
-        if (buf == NULL) {
-            asprintf(&buf, "%02x ", (unsigned int)(str[i] & 0xFF));
-        } else {
-            asprintf(&buf, "%s%02x ", buf, (unsigned int)(str[i] & 0xFF));
-        }
-    }
-
-    return buf;
 }

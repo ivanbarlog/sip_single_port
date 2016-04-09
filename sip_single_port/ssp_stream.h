@@ -24,16 +24,18 @@
  * RTP and RTCP ports for each media stream type
  */
 typedef struct endpoint_stream {
-    char *media_raw;
-    str *media;
-    char *port_raw;
-    str *port;
-    char *rtcp_port_raw;
-    str *rtcp_port;
+    char *media;
+    char *port;
+    char *rtcp_port;
 
     struct endpoint_stream *next;
 
 } endpoint_stream_t;
+
+/**
+ * Frees memory allocated by endpoint streams
+ */
+void destroy_endpoint_streams(endpoint_stream_t **streams);
 
 /**
  * Parses streams from sdp_info
@@ -61,16 +63,21 @@ char *print_endpoint_streams(endpoint_stream_t *streams);
  * Returns stream type by specified port
  * used to pair request/response ports
  */
-int get_stream_type(endpoint_stream_t *streams, unsigned short port, str **type);
+int get_stream_type(endpoint_stream_t *streams, unsigned short port, char **type);
 
 /**
  * Returns stream port by specified type
  * used to pair request/response ports
  */
-int get_stream_port(endpoint_stream_t *streams, str type, unsigned short *port);
+int get_stream_port(endpoint_stream_t *streams, char *type, unsigned short *port);
 
-int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, str **type);
+int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, char **type);
 
-int get_stream_rtcp_port(endpoint_stream_t *streams, str type, unsigned short *port);
+int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short *port);
+
+/**
+ * Checks if the port is present in endpoint streams
+ */
+int contain_port(endpoint_stream_t *streams, unsigned short *port);
 
 #endif //KAMAILIO_SSP_STREAM_H

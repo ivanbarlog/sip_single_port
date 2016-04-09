@@ -7,6 +7,8 @@
 
 #define _GNU_SOURCE //allows us to use asprintf
 
+#include <stdlib.h>
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../../parser/msg_parser.h"
@@ -44,21 +46,13 @@ int parse_call_id(sip_msg_t *msg, str *call_id);
 int get_msg_body(struct sip_msg *msg, str *body);
 
 /**
- * Changes dynamic str structure to char array
- * Returns 0 on success, -1 otherwise
+ * Copies string from original_string to newly allocated shm memory
  */
-int str_to_char(str *value, char **new_value);
-
-int copy_str(str *value, char **new_value, str **copy);
+int shm_copy_string(const char *original_string, int original_length, char **new_string);
 
 /**
- * Returns hex representation string of the bytes in str
+ * Copies string from original_string to newly allocated pkg memory
  */
-char * print_hex_str(str *str);
-
-/**
- * Returns hex representation string of the bytes in str
- */
-char * print_hex(char *str);
+int pkg_copy_string(const char *original_string, int original_length, char **new_string);
 
 #endif //KAMAILIO_SSP_FUNCTIONS_H
