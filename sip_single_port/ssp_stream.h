@@ -75,4 +75,9 @@ int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, ch
 
 int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short *port);
 
+/**
+ * Checks if the port is present in endpoint streams
+ */
+int contain_port(endpoint_stream_t *streams, unsigned short *port);
+
 #endif //KAMAILIO_SSP_STREAM_H

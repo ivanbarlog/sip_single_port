@@ -101,6 +101,20 @@ static char *get_line() {
     return " +--------------+------------+-------------+";
 }
 
+static unsigned int get_rtcp_port(endpoint_stream_t *stream) {
+    char tmp;
+    unsigned int rtcp_port;
+    int result;
+
+    result = sscanf(stream->rtcp_port, "%u %s", &rtcp_port, &tmp);
+
+    if (result == EOF || rtcp_port == 0) {
+        rtcp_port = (unsigned int) atoi(stream->port) + 1;
+    }
+
+    return rtcp_port;
+}
+
 char *print_stream(endpoint_stream_t *stream) {
     char *result;
     int success;
@@ -176,13 +190,15 @@ char *print_endpoint_streams(endpoint_stream_t *streams) {
 
 int get_stream_type(endpoint_stream_t *streams, unsigned short port, char **type) {
 
+    int rtp_port, rtcp_port;
+
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
 
-        int rtp_port = atoi(current->port);
-        int rtcp_port = atoi(current->rtcp_port);
+        rtp_port = (int) atoi(current->port);
+        rtcp_port = (int) get_rtcp_port(current);
 
         if (rtp_port == port || rtcp_port == port) {
             *type = current->media;
@@ -217,17 +233,15 @@ int get_stream_port(endpoint_stream_t *streams, char *type, unsigned short *port
 }
 
 int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, char **type) {
-    unsigned int rtp_port, rtcp_port;
+
+    int rtcp_port;
 
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
 
-        rtp_port = (unsigned int) atoi(current->port);
-        rtcp_port = (unsigned int) atoi(current->rtcp_port);
-
-        rtcp_port = rtcp_port == 0 ? rtp_port + 1 : rtcp_port;
+        rtcp_port = (int) get_rtcp_port(current);
 
         if (rtcp_port == src_port) {
             *type = current->media;
@@ -243,22 +257,15 @@ int get_stream_type_rtcp(endpoint_stream_t *streams, unsigned short src_port, ch
 }
 
 int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short *port) {
-    char tmp;
-    unsigned int rtcp_port;
-    int success;
 
     endpoint_stream_t *current;
     current = streams;
 
     while (current != NULL) {
-        if (strcmp(current->media, type) == 0) {
-            success = sscanf(current->rtcp_port, "%u %s", &rtcp_port, &tmp);
 
-            if (success == EOF || rtcp_port == 0) {
-                *port = (unsigned int) atoi(current->port) + 1;
-            } else {
-                *port = rtcp_port;
-            }
+        if (strcmp(current->media, type) == 0) {
+
+            *port = get_rtcp_port(current);
 
             return 0;
         }
@@ -267,5 +274,36 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short 
     }
 
     INFO("Cannot find stream with type '%s'\n", type);
+    return -1;
+}
+
+int contain_port(endpoint_stream_t *streams, unsigned short *port) {
+
+    int rtp_port, rtcp_port;
+
+    endpoint_stream_t *current;
+    current = streams;
+
+    while (current != NULL) {
+
+        rtp_port = (int) atoi(current->port);
+        rtcp_port = (int) get_rtcp_port(current);
+
+        if (rtp_port == *port) {
+            DBG("Found RTP port.\n");
+
+            return 0;
+        }
+
+        if (rtcp_port == *port) {
+            DBG("Found RTCP port.\n");
+
+            return 0;
+        }
+
+        current = current->next;
+    }
+
+    INFO("Cannot find port '%hu' in endpoint streams.\n", *port);
     return -1;
 }

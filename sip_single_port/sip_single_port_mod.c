@@ -152,7 +152,6 @@ int msg_received(void *data) {
     int msg_type = get_msg_type(&msg);
 
     int success;
-    char *src_ip = NULL;
     char *tag = NULL;
     char *original_msg = NULL;
     char *modified_msg = NULL;
@@ -227,24 +226,12 @@ int msg_received(void *data) {
         case SSP_RTCP_PACKET:
             INFO("RTP/RTCP packet\n");
 
-            struct receive_info *ri;
+            char src_ip[16];
             unsigned short src_port, dst_port;
 
-            ri = (struct receive_info *) d[2];
-            src_port = ri->src_port;
-            success = asprintf(
-                    &src_ip,
-                    "%d.%d.%d.%d",
-                    ri->src_ip.u.addr[0],
-                    ri->src_ip.u.addr[1],
-                    ri->src_ip.u.addr[2],
-                    ri->src_ip.u.addr[3]
-            );
+            struct receive_info *ri = (struct receive_info *) d[2];
 
-            if (success == -1) {
-                ERR("asprintf failed to allocate memory\n");
-                goto done;
-            }
+            set_src_ip_and_port(src_ip, &src_port, ri);
 
             endpoint_t *dst_endpoint = NULL;
             if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &connections_list) != 0) {

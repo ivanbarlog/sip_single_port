@@ -267,6 +267,38 @@ int get_counter_port(const char *ip, char *type, connection_t *connection, unsig
     return 0;
 }
 
+static int process_endpoints(
+        endpoint_t *endpoint1,
+        endpoint_t *endpoint2,
+        endpoint_t **endpoint,
+        const char *ip,
+        short unsigned int port
+) {
+
+    DBG("COMPARE %s & %s\n", endpoint1->ip, ip);
+    if (strcmp(endpoint1->ip, ip) == 0) {
+
+        DBG("IP match.\n");
+
+        // matching IP, find out if port will match
+        if (contain_port(endpoint1->streams, &port) == 0) {
+            *endpoint = endpoint2;
+
+            DBG("IP:port match.\n");
+
+            if (endpoint2->sibling == NULL) {
+                endpoint2->sibling = endpoint1;
+            }
+
+            return 0;
+        }
+    }
+
+    DBG("IP:port not matching\n");
+
+    return -1;
+}
+
 int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list) {
     *endpoint = NULL;
 
@@ -279,26 +311,17 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
     current = *connection_list;
 
     while (current != NULL) {
-        /*
-         * Connection must have both request and response endpoints
-         */
-        if (has_request_and_response_endpoints(current) == 0) {
-            // todo here we should check also for port not just IP (traverse all ports)
-            if (strcmp(current->request_endpoint->ip, ip) == 0) {
-                *endpoint = current->response_endpoint;
-                if (current->response_endpoint->sibling == NULL) {
-                    current->response_endpoint->sibling = current->request_endpoint;
-                }
 
+        // Connection must have both request and response endpoints
+        if (has_request_and_response_endpoints(current) == 0) {
+
+            DBG("Response endpoint streams\n");
+            if (process_endpoints(current->request_endpoint, current->response_endpoint, endpoint, ip, port) == 0) {
                 return 0;
             }
 
-            if (strcmp(current->response_endpoint->ip, ip) == 0) {
-                *endpoint = current->request_endpoint;
-                if (current->request_endpoint->sibling == NULL) {
-                    current->request_endpoint->sibling = current->response_endpoint;
-                }
-
+            DBG("Request endpoint streams\n");
+            if (process_endpoints(current->response_endpoint, current->request_endpoint, endpoint, ip, port) == 0) {
                 return 0;
             }
         }
@@ -306,7 +329,7 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
         current = current->next;
     }
 
-    INFO("IP '%s' was not found in connections\n", ip);
+    INFO("IP '%s:%d' was not found in connections\n", ip, port);
     return -1;
 }
 
