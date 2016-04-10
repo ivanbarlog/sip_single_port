@@ -123,25 +123,19 @@ int msg_received(void *data) {
     int len = *(unsigned int *) d2;
 
     sip_msg_t msg;
-    str *obuf;
+    str obuf = {0, 0};
 
-    obuf = (str *) pkg_malloc(sizeof(str));
-    if (obuf == NULL) {
-        ERR("cannot allocate pkg memory");
-        goto done;
-    }
+    obuf.s = s;
+    obuf.len = len;
 
-    obuf->s = s;
-    obuf->len = len;
-
-    if (obuf->len == 0 || strlen(obuf->s) == 0) {
+    if (obuf.len == 0 || strlen(obuf.s) == 0) {
         ERR("skipping empty packet");
         return 0;
     }
 
     memset(&msg, 0, sizeof(sip_msg_t));
-    msg.buf = obuf->s;
-    msg.len = obuf->len;
+    msg.buf = obuf.s;
+    msg.len = obuf.len;
 
     str str_call_id;
     char *shm_call_id = NULL;
@@ -246,13 +240,13 @@ int msg_received(void *data) {
             } else if (mode == DUAL_PROXY_MODE) {
 
                 int tag_length;
-                unsigned char first_byte = obuf->s[0];
+                unsigned char first_byte = obuf.s[0];
 
                 // the RTP/RTCP packet is already modified
                 if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
-                    if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
+                    if (parse_tagged_msg(&(obuf.s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
                         ERR("Cannot parse tagged message.");
                         goto done;
                     }
@@ -263,12 +257,16 @@ int msg_received(void *data) {
                         goto done;
                     }
 
+                    pkg_free(pkg_call_id);
+
                     if (get_counter_port(src_ip, pkg_media_type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
                         goto done;
                     }
 
-                    if (remove_tag(obuf, tag_length) == -1) {
+                    pkg_free(pkg_media_type);
+
+                    if (remove_tag(&obuf, tag_length) == -1) {
                         ERR("Cannot remove tag from tagged message.\n");
                         goto done;
                     }
@@ -280,7 +278,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (tag_message(obuf, src_endpoint->call_id, media_type) == -1) {
+                    if (tag_message(&obuf, src_endpoint->call_id, media_type) == -1) {
                         ERR("Cannot tag message.\n");
                         goto done;
                     }
@@ -299,13 +297,9 @@ int msg_received(void *data) {
                 goto done;
             }
 
-            if (send_packet_to_endpoint(obuf, *dst_ip) == 0) {
+            if (send_packet_to_endpoint(&obuf, *dst_ip) == 0) {
                 INFO("RTP packet sent successfully!\n");
             }
-
-            // when obuf is pointing to pkg memory allocated by us we'll free it
-            if (pkg_obuf == 1 && obuf->s != NULL)
-                pkg_free(obuf->s);
 
             break;
         default:
@@ -318,14 +312,9 @@ int msg_received(void *data) {
     if (shm_call_id != NULL)
         shm_free(shm_call_id);
 
-    if (pkg_call_id != NULL)
-        pkg_free(pkg_call_id);
-
-    if (pkg_media_type != NULL)
-        pkg_free(pkg_media_type);
-
-    if (obuf != NULL)
-        pkg_free(obuf);
+    // when obuf is pointing to pkg memory allocated by us we'll free it
+    if (pkg_obuf == 1 && obuf.s != NULL)
+        pkg_free(obuf.s);
 
     return 0;
 }
