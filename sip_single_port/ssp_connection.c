@@ -1,10 +1,5 @@
 #include "ssp_connection.h"
 
-/**
- * Head of connections list
- */
-static connection_t *connections = NULL;
-
 static int has_request_and_response_endpoints(connection_t *connection) {
     if (connection->request_endpoint == NULL) {
         return -1;
@@ -17,35 +12,63 @@ static int has_request_and_response_endpoints(connection_t *connection) {
     return 0;
 }
 
-connection_t *create_connection(str call_id) {
-    connection_t *connection;
-    connection = pkg_malloc(sizeof(connection_t));
+void destroy_connection(connection_t *connection) {
+    if (connection->lock != NULL)
+        lock_dealloc(connection->lock);
+
+    if (connection->call_id != NULL)
+        shm_free(connection->call_id);
+
+
+    if (connection->request_endpoint != NULL)
+        destroy_endpoint(connection->request_endpoint);
+
+    if (connection->response_endpoint != NULL)
+        destroy_endpoint(connection->response_endpoint);
+
+    // we don't need to free next, prev, request and response endpoint IP
+    // since they are just pointers and will be freed after whole connection is
+
+    shm_free(connection);
+}
+
+connection_t *create_connection(char *call_id) {
+    connection_t *connection = (connection_t *) shm_malloc(sizeof(connection_t));
 
     if (connection == NULL) {
-        ERR("cannot allocate pkg memory");
-        return NULL;
-    }
-
-
-    if (copy_str(&call_id, &(connection->call_id_raw), &(connection->call_id)) == -1) {
-        ERR("cannot allocate memory.\n");
+        ERR("cannot allocate shm memory");
         return NULL;
     }
 
     connection->next = NULL;
     connection->prev = NULL;
+
+    connection->call_id = NULL;
+
     connection->request_endpoint = NULL;
     connection->response_endpoint = NULL;
+
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
-    connection->same_ip = 0;
-    connection->req_ip_alias = NULL;
-    connection->res_ip_alias = NULL;
+
+    connection->lock = NULL;
+
+    connection->lock = lock_alloc();
+
+    if (connection->lock == NULL)
+    {
+        ERR("cannot allocate the lock\n");
+        destroy_connection(connection);
+
+        return NULL;
+    }
+
+    shm_copy_string(call_id, strlen(call_id), &(connection->call_id));
 
     return connection;
 }
 
-int push_connection(connection_t *connection) {
+int push_connection(connection_t *connection, connection_t **connection_list) {
     int ctr = 1;
     connection_t *tmp;
     tmp = connection;
@@ -54,13 +77,13 @@ int push_connection(connection_t *connection) {
      * If connections wasn't initialized yet
      * connection became root of connections
      */
-    if (connections == NULL) {
-        connections = tmp;
+    if (*connection_list == NULL) {
+        *connection_list = tmp;
         return ctr;
     }
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
 
     /**
      * Find last connection in list
@@ -97,81 +120,27 @@ static char *get_line(int type) {
     return " +--------------------+--------------------+";
 }
 
-char *print_endpoint_aliases(alias_t *alias) {
-    char *result = NULL;
-    int success;
-
-    alias_t *current;
-    current = alias;
-
-    while (current != NULL) {
-        if (result == NULL) {
-            success = asprintf(
-                    &result,
-                    " | %-39s |",
-                    current->ip_port
-            );
-        } else {
-            success = asprintf(
-                    &result,
-                    "%s\n | %-39s |",
-                    result, current->ip_port
-            );
-        }
-
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return NULL;
-        }
-        current = current->next;
-    }
-
-    if (result == NULL) {
-        success = asprintf(
-                &result,
-                " | %-39s |",
-                "not initialized - IPs differ"
-        );
-
-        if (success == -1) {
-            ERR("asprintf failed to allocate memory\n");
-            return NULL;
-        }
-    }
-
-
-    return result;
-}
-
 char *print_connection(connection_t *connection) {
-    char *result;
-    char *connection_info;
-    char *request_endpoint_info;
-    char *response_endpoint_info;
+    char *result = NULL;
+    char *connection_info = NULL;
+    char *request_endpoint_info = NULL;
+    char *response_endpoint_info = NULL;
     int success;
 
     success = asprintf(
             &connection_info,
-            "%s\n | %-39s |\n%s\n | %-39.*s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n | %-39s |\n%s\n%s\n%s\n | %-39s |\n%s\n%s\n%s\n",
+            "%s\n | %-39s |\n%s\n | %-39s |\n%s\n | %-18s | %-18s |\n%s\n | %-18s | %-18s |\n%s\n",
             get_hdr_line(0),
             "Connection by Call-ID",
             get_line(0),
-            connection->call_id->len, connection->call_id->s,
+            connection->call_id,
             get_hdr_line(1),
             "Request IP",
             "Response IP",
             get_line(1),
-            connection->request_endpoint_ip != NULL ? connection->request_endpoint_ip : "none",
-            connection->response_endpoint_ip != NULL ? connection->response_endpoint_ip : "none",
-            get_line(0),
-            "Request aliases",
-            get_line(0),
-            print_endpoint_aliases(connection->req_ip_alias),
-            get_line(0),
-            "Response aliases",
-            get_line(0),
-            print_endpoint_aliases(connection->res_ip_alias),
-            get_line(1)
+            connection->request_endpoint != NULL ? *(connection->request_endpoint_ip) : "none",
+            connection->response_endpoint != NULL ? *(connection->response_endpoint_ip) : "none",
+            get_line(0)
     );
 
     if (success == -1) {
@@ -190,6 +159,15 @@ char *print_connection(connection_t *connection) {
             response_endpoint_info
     );
 
+    if (connection_info != NULL)
+        free(connection_info);
+
+    if (request_endpoint_info != NULL)
+        free(request_endpoint_info);
+
+    if (response_endpoint_info != NULL)
+        free(response_endpoint_info);
+
     if (success == -1) {
         ERR("asprintf failed to allocate memory\n");
         return NULL;
@@ -198,25 +176,29 @@ char *print_connection(connection_t *connection) {
     return result;
 }
 
-char *print_connections_list() {
+char *print_connections_list(connection_t **connection_list) {
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
-        return "not initialized yet\n";
+        return NULL;
     }
 
     char *result = 0;
     int success;
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
+
+    char *connection_info = NULL;
 
     result = print_connection(current);
     while (current->next != NULL) {
+        connection_info = print_connection(current->next);
+
         success = asprintf(
                 &result,
                 "%s%s",
-                result, print_connection(current->next)
+                result, connection_info
         );
 
         if (success == -1) {
@@ -224,139 +206,146 @@ char *print_connections_list() {
             return NULL;
         }
 
+        if (connection_info != NULL)
+            free(connection_info);
+
         current = current->next;
     }
 
     return result;
 }
 
-int find_connection_by_call_id(str call_id, connection_t **connection) {
+int find_connection_by_call_id(char *call_id, connection_t **connection, connection_t **connection_list) {
     *connection = NULL;
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return -1;
     }
 
     connection_t *current;
-    current = connections;
+    current = *connection_list;
 
     while (current != NULL) {
-        if (STR_EQ(*(current->call_id), call_id) == 1) {
+
+        if (strcmp(current->call_id, call_id) == 0) {
             *connection = current;
+
             return 0;
         }
 
         current = current->next;
     }
 
-    INFO("call id '%.*s' was not found in connections list\n", call_id.len, call_id.s);
+    INFO("call id '%s' was not found in connections list\n", call_id);
+
     return -1;
 }
 
-int find_endpoint_by_alias(alias_t *aliases, char *ip_port) {
-    alias_t *current_alias;
-    current_alias = aliases;
+int get_counter_port(const char *ip, char *type, connection_t *connection, unsigned short *port) {
 
-    while (current_alias != NULL) {
-        if (strcmp(current_alias->ip_port, ip_port) == 0) {
-            return 1;
-        }
+    endpoint_t *counter_endpoint = NULL;
 
-        current_alias = current_alias->next;
+    if (strcmp(*(connection->request_endpoint_ip), ip) == 0) {
+        counter_endpoint = connection->response_endpoint;
     }
 
+    if (strcmp(*(connection->response_endpoint_ip), ip) == 0) {
+        counter_endpoint = connection->request_endpoint;
+    }
+
+    if (counter_endpoint == NULL) {
+        ERR("counter endpoint not found\n");
+        return -1;
+    }
+
+    if (get_stream_port(counter_endpoint->streams, type, port) == -1) {
+        ERR("Cannot find counter part stream with type '%s'\n", type);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int process_endpoints(
+        endpoint_t *endpoint1,
+        endpoint_t *endpoint2,
+        endpoint_t **endpoint,
+        const char *ip,
+        short unsigned int port
+) {
+
+    DBG("COMPARE %s & %s\n", endpoint1->ip, ip);
+    if (strcmp(endpoint1->ip, ip) == 0) {
+
+        DBG("IP match.\n");
+
+        // matching IP, find out if port will match
+        if (contain_port(endpoint1->streams, &port) == 0) {
+            *endpoint = endpoint2;
+
+            DBG("IP:port match.\n");
+
+            if (endpoint2->sibling == NULL) {
+                endpoint2->sibling = endpoint1;
+            }
+
+            return 0;
+        }
+    }
+
+    DBG("IP:port not matching\n");
+
     return -1;
 }
 
-int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint) {
+int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list) {
     *endpoint = NULL;
-    char *ip_port;
-    int success;
 
-    if (connections == NULL) {
+    if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return -1;
     }
 
     connection_t *current;
-    current = connections;
-
-    success = asprintf(
-            &ip_port,
-            "%s:%hu",
-            ip, port
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return -1;
-    }
+    current = *connection_list;
 
     while (current != NULL) {
-        /*
-         * Connection must have both request and response endpoints
-         */
+
+        // Connection must have both request and response endpoints
         if (has_request_and_response_endpoints(current) == 0) {
-            if (current->same_ip == 0) {
-                if (strcmp(current->request_endpoint->ip, ip) == 0) {
-                    *endpoint = current->response_endpoint;
-                    if (current->response_endpoint->sibling == NULL) {
-                        current->response_endpoint->sibling = current->request_endpoint;
-                    }
 
-                    return 0;
-                }
+            DBG("Response endpoint streams\n");
+            if (process_endpoints(current->request_endpoint, current->response_endpoint, endpoint, ip, port) == 0) {
+                return 0;
+            }
 
-                if (strcmp(current->response_endpoint->ip, ip) == 0) {
-                    *endpoint = current->request_endpoint;
-                    if (current->request_endpoint->sibling == NULL) {
-                        current->request_endpoint->sibling = current->response_endpoint;
-                    }
-
-                    return 0;
-                }
-            } else {
-                if (find_endpoint_by_alias(current->req_ip_alias, ip_port) == 1) {
-                    *endpoint = current->response_endpoint;
-                    if (current->response_endpoint->sibling == NULL) {
-                        current->response_endpoint->sibling = current->request_endpoint;
-                    }
-
-                    return 0;
-                }
-
-                if (find_endpoint_by_alias(current->res_ip_alias, ip_port) == 1) {
-                    *endpoint = current->request_endpoint;
-                    if (current->request_endpoint->sibling == NULL) {
-                        current->request_endpoint->sibling = current->response_endpoint;
-                    }
-
-                    return 0;
-                }
+            DBG("Request endpoint streams\n");
+            if (process_endpoints(current->response_endpoint, current->request_endpoint, endpoint, ip, port) == 0) {
+                return 0;
             }
         }
 
         current = current->next;
     }
 
-    INFO("IP '%s' was not found in connections\n", ip);
+    INFO("IP '%s:%d' was not found in connections\n", ip, port);
     return -1;
 }
 
-int remove_connection(str call_id) {
+int remove_connection(char *call_id, connection_t **connection_list) {
     connection_t *prev;
     connection_t *next;
     connection_t *connection = NULL;
 
-    if (find_connection_by_call_id(call_id, &connection) == 0) {
+    if (find_connection_by_call_id(call_id, &connection, connection_list) == 0) {
         prev = connection->prev;
         next = connection->next;
 
         if (prev == NULL && next == NULL) {
-            connections = NULL;
+            *connection_list = NULL;
         } else if (prev == NULL) {
-            connections = next;
+            *connection_list = next;
             next->prev = NULL;
         } else if (next == NULL) {
             prev->next = NULL;
@@ -365,115 +354,11 @@ int remove_connection(str call_id) {
             next->prev = prev;
         }
 
-        pkg_free(connection);
+        destroy_connection(connection);
 
         return 0;
     }
 
-    INFO("Connection with '%.*s' call id was not found.\n", call_id.len, call_id.s);
+    INFO("Connection with '%s' call id was not found.\n", call_id);
     return -1;
-}
-
-int fill_in_aliases(connection_t *connection) {
-    add_aliases(connection->request_endpoint_ip, connection->request_endpoint, &(connection->req_ip_alias));
-    add_aliases(connection->response_endpoint_ip, connection->response_endpoint, &(connection->res_ip_alias));
-
-    return 0;
-}
-
-int add_aliases(char *ip, endpoint_t *endpoint, alias_t **aliases) {
-    char *rtcp;
-    int success;
-    endpoint_stream_t *current;
-    alias_t *head = NULL;
-    alias_t *current_alias = NULL;
-
-    current = endpoint->streams;
-
-    while (current != NULL) {
-        alias_t *tmp = NULL;
-
-        if (strcmp(current->port_raw, "0") == 0) {
-            INFO("skipping stream with not defined ports eg. RTP == 0\n");
-            current = current->next;
-            continue;
-        }
-
-        tmp = create_alias(ip, current->port_raw);
-
-        if (tmp == NULL) {
-            ERR("cannot create alias");
-            return -1;
-        }
-
-        if (head == NULL) {
-            head = tmp;
-            current_alias = head;
-        } else {
-            current_alias->next = tmp;
-            current_alias = current_alias->next;
-        }
-
-        if (current->rtcp_port->len == 0) {
-            success = asprintf(
-                    &rtcp,
-                    "%d",
-                    atoi(current->port_raw) + 1
-            );
-
-            if (success == -1) {
-                ERR("asprintf failed to allocate memory\n");
-                return -1;
-            }
-        } else {
-            rtcp = current->rtcp_port_raw;
-        }
-
-        tmp = create_alias(ip, rtcp);
-
-        if (tmp == NULL) {
-            ERR("cannot create alias");
-            return -1;
-        }
-
-        if (head == NULL) {
-            head = tmp;
-            current_alias = head;
-        } else {
-            current_alias->next = tmp;
-            current_alias = current_alias->next;
-        }
-
-        current = current->next;
-    }
-
-    *aliases = head;
-
-    return 0;
-}
-
-alias_t *create_alias(char *ip, char *port) {
-    int success;
-    alias_t *tmp_alias;
-
-    tmp_alias = pkg_malloc(sizeof(alias_t));
-    if (tmp_alias == NULL) {
-        ERR("cannot allocate pkg memory");
-        return NULL;
-    }
-
-    tmp_alias->next = NULL;
-
-    success = asprintf(
-            &(tmp_alias->ip_port),
-            "%s:%s",
-            ip, port
-    );
-
-    if (success == -1) {
-        ERR("asprintf failed to allocate memory\n");
-        return NULL;
-    }
-
-    return tmp_alias;
 }

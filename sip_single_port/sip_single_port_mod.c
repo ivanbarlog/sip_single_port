@@ -46,6 +46,8 @@
 #include "../../forward.h"
 #include "../../globals.h"
 
+#include "../../mem/shm_mem.h"
+
 #include "ssp_parse.h"
 #include "ssp_replace.h"
 #include "ssp_functions.h"
@@ -56,6 +58,11 @@
 
 
 MODULE_VERSION
+
+/**
+ * Head of connections list
+ */
+static connection_t *connections_list = NULL;
 
 /** module functions */
 static int mod_init(void);
@@ -127,21 +134,33 @@ int msg_received(void *data) {
     obuf->s = s;
     obuf->len = len;
 
+    if (obuf->len == 0 || strlen(obuf->s) == 0) {
+        ERR("skipping empty packet");
+        return 0;
+    }
 
     memset(&msg, 0, sizeof(sip_msg_t));
     msg.buf = obuf->s;
     msg.len = obuf->len;
 
-    str call_id;
+    str str_call_id;
+    char *shm_call_id = NULL;
+    char *pkg_call_id = NULL;
+    char *pkg_media_type = NULL;
+
     int msg_type = get_msg_type(&msg);
+
+    int pkg_obuf = 0;
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
-            if (parse_call_id(&msg, &call_id) == -1) {
+            if (parse_call_id(&msg, &str_call_id) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
             }
+
+            shm_copy_string(str_call_id.s, str_call_id.len, &shm_call_id);
 
             if (initializes_dialog(&msg) == 0) {
                 endpoint_t *endpoint;
@@ -152,139 +171,126 @@ int msg_received(void *data) {
                 }
 
                 connection_t *connection = NULL;
-                if (find_connection_by_call_id(call_id, &connection) == -1) {
+                if (find_connection_by_call_id(shm_call_id, &connection, &connections_list) == -1) {
 
-                    connection = create_connection(call_id);
+                    // if connection was not found by Call-ID we'll create one
+                    connection = create_connection(shm_call_id);
                     if (connection == NULL) {
                         ERR("Cannot create connection.\n");
                         goto done;
                     }
 
-                    if (push_connection(connection) == -1) {
-                        ERR("Cannot push connection to list\n");
-                        goto done;
-                    }
+                    int connections_count = push_connection(connection, &connections_list);
+                    DBG("%d. connection pushed to connections list\n", connections_count);
                 }
 
-                int success;
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
-                    connection->request_endpoint = pkg_malloc(sizeof(endpoint_t));
-                    if (connection->request_endpoint == NULL) {
-                        ERR("cannot allocate pkg memory");
-                        goto done;
-                    }
 
+                    // add endpoint to connection
                     connection->request_endpoint = endpoint;
-
-                    success = asprintf(
-                            &(connection->request_endpoint_ip),
-                            "%s",
-                            endpoint->ip
-                    );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
-                        goto done;
-                    }
-
+                    connection->request_endpoint_ip = &(endpoint->ip);
+                    endpoint->call_id = connection->call_id;
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
-                    connection->response_endpoint = pkg_malloc(sizeof(endpoint_t));
-                    if (connection->response_endpoint == NULL) {
-                        ERR("cannot allocate pkg memory");
-                        goto done;
-                    }
 
+                    // add endpoint to connection
                     connection->response_endpoint = endpoint;
-
-                    success = asprintf(
-                            &(connection->response_endpoint_ip),
-                            "%s",
-                            endpoint->ip
-                    );
-
-                    if (success == -1) {
-                        ERR("asprintf failed to allocate memory\n");
-                        goto done;
-                    }
-                }
-
-                if (connection->request_endpoint_ip && connection->response_endpoint_ip) {
-                    if (strcmp(connection->request_endpoint_ip, connection->response_endpoint_ip) == 0) {
-                        connection->same_ip = 1;
-                        fill_in_aliases(connection);
-                    } else {
-                        connection->same_ip = 0;
-                    }
+                    connection->response_endpoint_ip = &(endpoint->ip);
+                    endpoint->call_id = connection->call_id;
                 }
             }
 
-            if (cancells_dialog(&msg) == 0) {
-                remove_connection(call_id);
+            if (cancels_dialog(&msg) == 0) {
+                remove_connection(shm_call_id, &connections_list);
             }
 
             if (terminates_dialog(&msg) == 0) {
-                remove_connection(call_id);
+                remove_connection(shm_call_id, &connections_list);
             }
 
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", print_connections_list());
+
+            char *cl_table = print_connections_list(&connections_list);
+            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+            if (cl_table != NULL)
+                free(cl_table);
 
             break;
         case SSP_RTP_PACKET: //no break
         case SSP_RTCP_PACKET:
             INFO("RTP/RTCP packet\n");
 
-            struct receive_info *ri;
-            char *src_ip;
+            char src_ip[16];
             unsigned short src_port, dst_port;
-            int success;
+            char *media_type;
 
-            ri = (struct receive_info *) d[2];
-            src_port = ri->src_port;
-            success = asprintf(
-                    &src_ip,
-                    "%d.%d.%d.%d",
-                    ri->src_ip.u.addr[0],
-                    ri->src_ip.u.addr[1],
-                    ri->src_ip.u.addr[2],
-                    ri->src_ip.u.addr[3]
-            );
+            struct receive_info *ri = (struct receive_info *) d[2];
 
-            if (success == -1) {
-                ERR("asprintf failed to allocate memory\n");
-                goto done;
-            }
+            set_src_ip_and_port(src_ip, &src_port, ri);
 
             endpoint_t *dst_endpoint = NULL;
-            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint) != 0) {
+            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &connections_list) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }
-
             endpoint_t *src_endpoint = dst_endpoint->sibling;
 
-            str *type = NULL;
-            if (msg_type == SSP_RTP_PACKET) {
-                if (get_stream_type(src_endpoint->streams, src_port, &type) == -1) {
-                    ERR("Cannot find stream with port '%d'\n", src_port);
+            if (mode == SINGLE_PROXY_MODE) {
+
+                if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
+                    ERR("Cannot find destination port where the packet should be forwarded.\n");
                     goto done;
                 }
 
-                if (get_stream_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                    ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
-                    goto done;
+            } else if (mode == DUAL_PROXY_MODE) {
+
+                int tag_length;
+                unsigned char first_byte = obuf->s[0];
+
+                // the RTP/RTCP packet is already modified
+                if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
+                    INFO("DUAL_PROXY_MODE changed RTP\n");
+
+                    if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
+                        ERR("Cannot parse tagged message.");
+                        goto done;
+                    }
+
+                    connection_t *connection;
+                    if (find_connection_by_call_id(pkg_call_id, &connection, &connections_list) == -1) {
+                        ERR("cannot find connection\n");
+                        goto done;
+                    }
+
+                    if (get_counter_port(src_ip, pkg_media_type, connection, &dst_port) == -1) {
+                        ERR("cannot find destination port\n");
+                        goto done;
+                    }
+
+                    if (remove_tag(obuf, tag_length) == -1) {
+                        ERR("Cannot remove tag from tagged message.\n");
+                        goto done;
+                    }
+
+                } else { // RTP/RTCP packet is not modified yet so we are about to tag it
+
+                    if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
+                        ERR("Cannot find destination port where the packet should be forwarded.\n");
+                        goto done;
+                    }
+
+                    if (tag_message(obuf, src_endpoint->call_id, media_type) == -1) {
+                        ERR("Cannot tag message.\n");
+                        goto done;
+                    }
                 }
+
+                pkg_obuf = 1;
+
             } else {
-                if (get_stream_type_rtcp(src_endpoint->streams, src_port, &type) == -1) {
-                    ERR("Cannot find stream with port '%d'\n", src_port);
-                    goto done;
-                }
-
-                if (get_stream_rtcp_port(dst_endpoint->streams, *type, &dst_port) == -1) {
-                    ERR("Cannot find counter part stream with type '%.*s'\n", type->len, type->s);
-                    goto done;
-                }
+                ERR("Unknown sip_single_port mode\n");
+                goto done;
             }
 
             struct sockaddr_in *dst_ip = NULL;
@@ -297,14 +303,29 @@ int msg_received(void *data) {
                 INFO("RTP packet sent successfully!\n");
             }
 
+            // when obuf is pointing to pkg memory allocated by us we'll free it
+            if (pkg_obuf == 1 && obuf->s != NULL)
+                pkg_free(obuf->s);
+
             break;
         default:
             goto done;
-            break;
     }
 
     done:
     free_sip_msg(&msg);
+
+    if (shm_call_id != NULL)
+        shm_free(shm_call_id);
+
+    if (pkg_call_id != NULL)
+        pkg_free(pkg_call_id);
+
+    if (pkg_media_type != NULL)
+        pkg_free(pkg_media_type);
+
+    if (obuf != NULL)
+        pkg_free(obuf);
 
     return 0;
 }
@@ -319,10 +340,12 @@ int msg_sent(void *data) {
     msg.len = obuf->len;
 
     if (skip_media_changes(&msg) == -1) {
+        DBG("Skipping SDP changes.");
         goto done;
     }
 
     if (change_media_ports(&msg, bind_address) == -1) {
+        ERR("Changing SDP failed.");
         goto done;
     }
 

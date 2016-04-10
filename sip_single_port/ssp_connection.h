@@ -6,22 +6,16 @@
 #include <stdio.h>
 #include "../../str.h"
 #include "../../mem/mem.h"
+#include "../../mem/shm_mem.h"
+#include "../../locking.h"
 
 #include "ssp_endpoint.h"
 
-typedef struct alias {
-    char *ip_port;
-    struct alias *next;
-} alias_t;
-
 typedef struct connection {
-    char *call_id_raw;
-    str *call_id;
-    char *request_endpoint_ip;
-    char *response_endpoint_ip;
-    int same_ip; // if request_endpoint_ip equals response_endpoint_ip this is set to 1 otherwise 0
-    alias_t *req_ip_alias; // Request IP aliases - format IP:port
-    alias_t *res_ip_alias; // Response IP aliases - format IP:port
+    char *call_id;
+
+    char **request_endpoint_ip;
+    char **response_endpoint_ip;
 
     endpoint_t *request_endpoint;
     endpoint_t *response_endpoint;
@@ -29,8 +23,18 @@ typedef struct connection {
     struct connection *prev;
     struct connection *next;
 
+    // lock for accessing connection from other kamailio processes
+    gen_lock_t *lock;
+
 } connection_t;
 
+
+/**
+ * Destroys connection by provided pointer
+ *
+ * Returns nothing
+ */
+void destroy_connection(connection_t *connection);
 
 /**
  * Initializes empty connection structure and assign
@@ -39,13 +43,13 @@ typedef struct connection {
  * Returns 0 on success, -1 otherwise
  * On failure the connection is set to NULL
  */
-connection_t *create_connection(str call_id);
+connection_t *create_connection(char *call_id);
 
 /**
  * Pushes connection to connections list
  * Returns actual count of connections in connections list
  */
-int push_connection(connection_t *connection);
+int push_connection(connection_t *connection, connection_t **connection_list);
 
 /**
  * Returns string containing formatted connection structure
@@ -61,14 +65,22 @@ char *print_connection(connection_t *connection);
  *
  * On error returns NULL
  */
-char *print_connections_list();
+char *print_connections_list(connection_t **connection_list);
 
 /**
  * Searches for connection by call_id
  * Returns 0 on success, -1 on fail
  * If connection is not found *connection is set to NULL
  */
-int find_connection_by_call_id(str call_id, connection_t **connection);
+int find_connection_by_call_id(char *call_id, connection_t **connection, connection_t **connection_list);
+
+/**
+ * Searches provided connection for endpoint with provided IP,
+ * then searches counter part endpoint for provided media_type and fills in port with the destination port
+ * Returns 0 on success, -1 on fail
+ * If port is not found *port is set to NULL
+ */
+int get_counter_port(const char *ip, char *type, connection_t *connection, unsigned short *port);
 
 /**
  * Searches for connections where request_endpoint_ip or response_endpoint_ip
@@ -77,38 +89,12 @@ int find_connection_by_call_id(str call_id, connection_t **connection);
  * counter part endpoint eg. if request_endpoint_ip equals ip endpoint
  * is set to response_endpoint and vice versa
  */
-int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint);
-
-/**
- * If ip_port is in aliases function returns 1 otherwise -1
- */
-int find_endpoint_by_alias(alias_t *aliases, char *ip_port);
+int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list);
 
 /**
  * Finds connection by call_id and removes it from connections list
  * Returns 0 on success otherwise -1
  */
-int remove_connection(str call_id);
-
-/**
- * Fills in aliases (IP:port) for both connection's endpoints
- * Returns 0 on success otherwise -1
- */
-int fill_in_aliases(connection_t *connection);
-
-/**
- * Creates IP:port alias
- */
-alias_t *create_alias(char *ip, char *port);
-
-/**
- * Adds aliases to linked list
- */
-int add_aliases(char *ip, endpoint_t *endpoint, alias_t **aliases);
-
-/**
- * Prints aliases for debugging purposes
- */
-char *print_endpoint_aliases(alias_t *alias);
+int remove_connection(char *call_id, connection_t **connection_list);
 
 #endif //KAMAILIO_SSP_CONNECTION_H

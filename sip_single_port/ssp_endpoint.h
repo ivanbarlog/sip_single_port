@@ -23,6 +23,7 @@
  */
 typedef struct endpoint {
     char *ip;
+    char *call_id;
 
     /* list of all media streams */
     struct endpoint_stream *streams;
@@ -30,6 +31,11 @@ typedef struct endpoint {
     struct endpoint *sibling;
 
 } endpoint_t;
+
+/**
+ * Destroys endpoint and all memory associated with it
+ */
+void destroy_endpoint(endpoint_t *endpoint);
 
 /**
  * Parses endpoint from sip_msg structure
