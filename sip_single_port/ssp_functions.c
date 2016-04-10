@@ -38,6 +38,8 @@ int get_socket_addr(char *endpoint_ip, unsigned short port, struct sockaddr_in *
 
     *ip = tmp;
 
+    pkg_free(tmp);
+
     return 0;
 }
 
