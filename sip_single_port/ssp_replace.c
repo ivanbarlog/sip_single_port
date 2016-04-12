@@ -30,7 +30,7 @@ int ssp_set_body(struct sip_msg *msg, str *nb) {
                 return -1;
             }
             if (del_lump(msg, body.s - msg->buf, body.len, 0) == 0) {
-                ERR("cannot delete existing body");
+                ERR("cannot delete existing body\n");
                 return -1;
             }
         }
@@ -193,7 +193,7 @@ int change_media_ports(sip_msg_t *msg, struct socket_info *bind_address) {
     // parse SDP
     str sdp = {0, 0};
     if (get_msg_body(msg, &sdp) != 0) {
-        ERR("Cannot parse SDP.");
+        ERR("Cannot parse SDP.\n");
         return -1;
     }
 

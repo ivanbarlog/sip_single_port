@@ -36,7 +36,7 @@ connection_t *create_connection(char *call_id) {
     connection_t *connection = (connection_t *) shm_malloc(sizeof(connection_t));
 
     if (connection == NULL) {
-        ERR("cannot allocate shm memory");
+        ERR("cannot allocate shm memory\n");
         return NULL;
     }
 

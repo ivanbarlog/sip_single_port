@@ -80,7 +80,7 @@ int shm_copy_string(const char *original_string, int original_length, char **new
     *new_string = (char *) shm_malloc(sizeof(char) * (original_length + 1));
 
     if (*new_string == NULL) {
-        ERR("cannot allocate shm memory");
+        ERR("cannot allocate shm memory\n");
         return -1;
     }
 
@@ -97,7 +97,7 @@ int pkg_copy_string(const char *original_string, int original_length, char **new
     *new_string = (char *) pkg_malloc(sizeof(char) * (original_length + 1));
 
     if (*new_string == NULL) {
-        ERR("cannot allocate pkg memory");
+        ERR("cannot allocate pkg memory\n");
         return -1;
     }
 

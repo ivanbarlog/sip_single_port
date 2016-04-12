@@ -104,6 +104,7 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
 
     if (tmp_call_id == NULL) {
         ERR("Cannot find Call-ID.\n");
+        free(tag);
 
         return -1;
     }
@@ -112,9 +113,12 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
 
     if (tmp_media_type == NULL) {
         ERR("Cannot find Media type.\n");
+        free(tag);
 
         return -1;
     }
+
+    free(tag);
 
     if (pkg_copy_string(tmp_call_id, strlen(tmp_call_id), call_id) == -1) {
         ERR("Copying string failed.\n");

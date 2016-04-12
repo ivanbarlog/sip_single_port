@@ -37,6 +37,14 @@
 
 #define _GNU_SOURCE //allows us to use asprintf
 
+/*
+ * uncomment for debugging purposes
+ *
+ * CONNECTIONS LIST will be shown but it contains memory leaks
+ * so it's not suitable for production
+ */
+// #define DEBUG_BUILD 1
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -127,7 +135,7 @@ int msg_received(void *data) {
 
     obuf = (str *) pkg_malloc(sizeof(str));
     if (obuf == NULL) {
-        ERR("cannot allocate pkg memory");
+        ERR("cannot allocate pkg memory\n");
         goto done;
     }
 
@@ -135,7 +143,7 @@ int msg_received(void *data) {
     obuf->len = len;
 
     if (obuf->len == 0 || strlen(obuf->s) == 0) {
-        ERR("skipping empty packet");
+        ERR("skipping empty packet\n");
         return 0;
     }
 
@@ -209,12 +217,13 @@ int msg_received(void *data) {
                 remove_connection(shm_call_id, &connections_list);
             }
 
-
-            char *cl_table = print_connections_list(&connections_list);
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+#ifdef DEBUG_BUILD
+        char *cl_table = print_connections_list(&connections_list);
+            DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
 
             if (cl_table != NULL)
                 free(cl_table);
+#endif
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -253,7 +262,7 @@ int msg_received(void *data) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
                     if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
-                        ERR("Cannot parse tagged message.");
+                        ERR("Cannot parse tagged message.\n");
                         goto done;
                     }
 
@@ -340,12 +349,12 @@ int msg_sent(void *data) {
     msg.len = obuf->len;
 
     if (skip_media_changes(&msg) == -1) {
-        DBG("Skipping SDP changes.");
+        DBG("Skipping SDP changes.\n");
         goto done;
     }
 
     if (change_media_ports(&msg, bind_address) == -1) {
-        ERR("Changing SDP failed.");
+        ERR("Changing SDP failed.\n");
         goto done;
     }
 
