@@ -43,7 +43,7 @@
  * CONNECTIONS LIST will be shown but it contains memory leaks
  * so it's not suitable for production
  */
-// #define DEBUG_BUILD 1
+//#define DEBUG_BUILD 1
 
 #include <stdio.h>
 #include <string.h>
@@ -63,7 +63,6 @@
 #include "ssp_connection.h"
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
-
 
 MODULE_VERSION
 
@@ -163,6 +162,16 @@ int msg_received(void *data) {
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
+
+            if (is_register_request(&msg)) {
+
+                // create new endpoint
+            }
+
+            if (is_register_response(&msg)) {
+                // swap endpoints and remove the old one
+            }
+
             if (parse_call_id(&msg, &str_call_id) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
@@ -307,6 +316,10 @@ int msg_received(void *data) {
                 ERR("Cannot instantiate socket address\n");
                 goto done;
             }
+
+#ifdef DEBUG_BUILD
+            INFO("Sending RTP/RTCP packet to %s:%d\n", dst_endpoint->ip, dst_port);
+#endif
 
             if (send_packet_to_endpoint(obuf, *dst_ip) == 0) {
                 INFO("RTP packet sent successfully!\n");
