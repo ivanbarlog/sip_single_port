@@ -37,6 +37,14 @@
 
 #define _GNU_SOURCE //allows us to use asprintf
 
+/*
+ * uncomment for debugging purposes
+ *
+ * CONNECTIONS LIST will be shown but it contains memory leaks
+ * so it's not suitable for production
+ */
+//#define DEBUG_BUILD 1
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -55,7 +63,6 @@
 #include "ssp_connection.h"
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
-
 
 MODULE_VERSION
 
@@ -123,19 +130,25 @@ int msg_received(void *data) {
     int len = *(unsigned int *) d2;
 
     sip_msg_t msg;
-    str obuf = {0, 0};
+    str *obuf;
 
-    obuf.s = s;
-    obuf.len = len;
+    obuf = (str *) pkg_malloc(sizeof(str));
+    if (obuf == NULL) {
+        ERR("cannot allocate pkg memory\n");
+        goto done;
+    }
 
-    if (obuf.len == 0 || strlen(obuf.s) == 0) {
-        ERR("skipping empty packet");
+    obuf->s = s;
+    obuf->len = len;
+
+    if (obuf->len == 0 || strlen(obuf->s) == 0) {
+        ERR("skipping empty packet\n");
         return 0;
     }
 
     memset(&msg, 0, sizeof(sip_msg_t));
-    msg.buf = obuf.s;
-    msg.len = obuf.len;
+    msg.buf = obuf->s;
+    msg.len = obuf->len;
 
     str str_call_id;
     char *shm_call_id = NULL;
@@ -149,6 +162,16 @@ int msg_received(void *data) {
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
+
+            if (is_register_request(&msg)) {
+
+                // create new endpoint
+            }
+
+            if (is_register_response(&msg)) {
+                // swap endpoints and remove the old one
+            }
+
             if (parse_call_id(&msg, &str_call_id) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
@@ -203,12 +226,13 @@ int msg_received(void *data) {
                 remove_connection(shm_call_id, &connections_list);
             }
 
-
-            char *cl_table = print_connections_list(&connections_list);
-            LM_DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+#ifdef DEBUG_BUILD
+        char *cl_table = print_connections_list(&connections_list);
+            DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
 
             if (cl_table != NULL)
                 free(cl_table);
+#endif
 
             break;
         case SSP_RTP_PACKET: //no break
@@ -240,14 +264,14 @@ int msg_received(void *data) {
             } else if (mode == DUAL_PROXY_MODE) {
 
                 int tag_length;
-                unsigned char first_byte = obuf.s[0];
+                unsigned char first_byte = obuf->s[0];
 
                 // the RTP/RTCP packet is already modified
                 if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
 
-                    if (parse_tagged_msg(&(obuf.s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
-                        ERR("Cannot parse tagged message.");
+                    if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
+                        ERR("Cannot parse tagged message.\n");
                         goto done;
                     }
 
@@ -257,16 +281,12 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    pkg_free(pkg_call_id);
-
                     if (get_counter_port(src_ip, pkg_media_type, connection, &dst_port) == -1) {
                         ERR("cannot find destination port\n");
                         goto done;
                     }
 
-                    pkg_free(pkg_media_type);
-
-                    if (remove_tag(&obuf, tag_length) == -1) {
+                    if (remove_tag(obuf, tag_length) == -1) {
                         ERR("Cannot remove tag from tagged message.\n");
                         goto done;
                     }
@@ -278,7 +298,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    if (tag_message(&obuf, src_endpoint->call_id, media_type) == -1) {
+                    if (tag_message(obuf, src_endpoint->call_id, media_type) == -1) {
                         ERR("Cannot tag message.\n");
                         goto done;
                     }
@@ -297,9 +317,17 @@ int msg_received(void *data) {
                 goto done;
             }
 
-            if (send_packet_to_endpoint(&obuf, *dst_ip) == 0) {
+#ifdef DEBUG_BUILD
+            INFO("Sending RTP/RTCP packet to %s:%d\n", dst_endpoint->ip, dst_port);
+#endif
+
+            if (send_packet_to_endpoint(obuf, *dst_ip) == 0) {
                 INFO("RTP packet sent successfully!\n");
             }
+
+            // when obuf is pointing to pkg memory allocated by us we'll free it
+            if (pkg_obuf == 1 && obuf->s != NULL)
+                pkg_free(obuf->s);
 
             break;
         default:
@@ -312,9 +340,14 @@ int msg_received(void *data) {
     if (shm_call_id != NULL)
         shm_free(shm_call_id);
 
-    // when obuf is pointing to pkg memory allocated by us we'll free it
-    if (pkg_obuf == 1 && obuf.s != NULL)
-        pkg_free(obuf.s);
+    if (pkg_call_id != NULL)
+        pkg_free(pkg_call_id);
+
+    if (pkg_media_type != NULL)
+        pkg_free(pkg_media_type);
+
+    if (obuf != NULL)
+        pkg_free(obuf);
 
     return 0;
 }
@@ -329,12 +362,12 @@ int msg_sent(void *data) {
     msg.len = obuf->len;
 
     if (skip_media_changes(&msg) == -1) {
-        DBG("Skipping SDP changes.");
+        DBG("Skipping SDP changes.\n");
         goto done;
     }
 
     if (change_media_ports(&msg, bind_address) == -1) {
-        ERR("Changing SDP failed.");
+        ERR("Changing SDP failed.\n");
         goto done;
     }
 

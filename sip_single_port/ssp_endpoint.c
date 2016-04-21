@@ -6,7 +6,7 @@ static char *parse_creator_ip(sip_msg_t *msg) {
     str sdp = {0, 0};
 
     if (get_msg_body(msg, &sdp) != 0) {
-        ERR("Cannot parse SDP.");
+        ERR("Cannot parse SDP.\n");
         return NULL;
     }
 

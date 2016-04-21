@@ -7,7 +7,7 @@
 # will use their internal default values.
 
 ## your SIP domain
-SIP_DOMAIN=kamailio.org
+# SIP_DOMAIN=kamailio.org
 
 ## chrooted directory
 # $CHROOT_DIR="/path/to/chrooted/directory"
@@ -17,7 +17,7 @@ SIP_DOMAIN=kamailio.org
 #
 # If you want to setup a database with kamdbctl, you must at least specify
 # this parameter.
-DBENGINE=MYSQL
+# DBENGINE=MYSQL
 
 ## database host
 # DBHOST=localhost
@@ -56,11 +56,7 @@ DBENGINE=MYSQL
 # FIXME
 
 # FOREVER="2030-05-28 21:32:15"
-# DEFAULT_ALIASES_EXPIRES=$FOREVER
 # DEFAULT_Q="1.0"
-# DEFAULT_CALLID="Default-Call-ID"
-# DEFAULT_CSEQ="13"
-# DEFAULT_LOCATION_EXPIRES=$FOREVER
 
 
 # Program to calculate a message-digest fingerprint 
@@ -68,6 +64,9 @@ DBENGINE=MYSQL
 
 # awk tool
 # AWK="awk"
+
+# gdb tool
+# GDB="gdb"
 
 # If you use a system with a grep and egrep that is not 100% gnu grep compatible,
 # e.g. solaris, install the gnu grep (ggrep) and specify this below.
@@ -99,6 +98,9 @@ DBENGINE=MYSQL
 # If to install presence related tables.
 # INSTALL_PRESENCE_TABLES=ask
 
+# If to install uid modules related tables.
+# INSTALL_DBUID_TABLES=ask
+
 # Define what module tables should be installed.
 # If you use the postgres database and want to change the installed tables, then you
 # must also adjust the STANDARD_TABLES or EXTRA_TABLES variable accordingly in the
@@ -122,7 +124,7 @@ DBENGINE=MYSQL
 # CTLENGINE="FIFO"
 
 ## path to FIFO file
-# OSER_FIFO="FIFO"
+# FIFOPATH="/var/run/kamailio/kamailio_fifo"
 
 ## check ACL names; default on (1); off (0)
 # VERIFY_ACL=1
@@ -140,7 +142,7 @@ DBENGINE=MYSQL
 
 ## Kamailio START Options
 ## PID file path - default is: /var/run/kamailio.pid
-# PID_FILE=/var/run/kamailio.pid
+# PID_FILE=/var/run/kamailio/kamailio.pid
 
 ## Extra start options - default is: not set
 # example: start Kamailio with 64MB share memory: STARTOPTIONS="-m 64"

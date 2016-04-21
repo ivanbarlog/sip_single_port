@@ -104,29 +104,35 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
 
     if (tmp_call_id == NULL) {
         ERR("Cannot find Call-ID.\n");
-
-        return -1;
-    }
-
-    char *tmp_media_type = strtok(NULL, delim);
-
-    if (tmp_media_type == NULL) {
-        ERR("Cannot find Media type.\n");
+        free(tag);
 
         return -1;
     }
 
     if (pkg_copy_string(tmp_call_id, strlen(tmp_call_id), call_id) == -1) {
         ERR("Copying string failed.\n");
+        free(tag);
 
         return -1;
     };
+
+    char *tmp_media_type = strtok(NULL, delim);
+
+    if (tmp_media_type == NULL) {
+        ERR("Cannot find Media type.\n");
+        free(tag);
+
+        return -1;
+    }
 
     if (pkg_copy_string(tmp_media_type, strlen(tmp_media_type), media_type) == -1) {
         ERR("Copying string failed.\n");
+        free(tag);
 
         return -1;
     };
+
+    free(tag);
 
     DBG("Parsed\nCall-ID: '%s'\nMedia type: '%s'\n", *call_id, *media_type);
     return 0;
