@@ -163,15 +163,6 @@ int msg_received(void *data) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
 
-            if (is_register_request(&msg)) {
-
-                // create new endpoint
-            }
-
-            if (is_register_response(&msg)) {
-                // swap endpoints and remove the old one
-            }
-
             if (parse_call_id(&msg, &str_call_id) == -1) {
                 ERR("Cannot parse Call-ID\n");
                 goto done;
