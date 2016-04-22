@@ -50,6 +50,10 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     endpoint->sibling = NULL;
     endpoint->streams = NULL;
 
+    endpoint->receiving_socket = NULL;
+    endpoint->sending_socket = NULL;
+    endpoint->tmp_receiving_socket = NULL;
+    endpoint->tmp_sending_socket = NULL;
 
     if (parse_sdp(msg) != 0) {
         ERR("Cannot parse SDP or body not present, destroying endpoint\n");

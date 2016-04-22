@@ -18,7 +18,7 @@
  * Sends buffer data to specified socket address
  * Returns 0 on success, -1 otherwise
  */
-int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip);
+int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip, struct socket_info *bind_address);
 
 /**
  * Fills in source IP and port from receive_info

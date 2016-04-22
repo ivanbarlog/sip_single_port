@@ -1,6 +1,6 @@
 #include "ssp_media_forward.h"
 
-int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip) {
+int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip, struct socket_info *bind_address) {
 
     int sent_bytes = sendto(
             bind_address->socket,

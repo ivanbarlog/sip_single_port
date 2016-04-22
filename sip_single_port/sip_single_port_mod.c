@@ -159,6 +159,8 @@ int msg_received(void *data) {
 
     int pkg_obuf = 0;
 
+    struct receive_info *ri = (struct receive_info *) d[2];
+
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
@@ -205,8 +207,14 @@ int msg_received(void *data) {
                     // add endpoint to connection
                     connection->response_endpoint = endpoint;
                     connection->response_endpoint_ip = &(endpoint->ip);
-                    endpoint->call_id = connection->call_id;
                 }
+
+                // add Call-ID to endpoint for quicker searching
+                endpoint->call_id = connection->call_id;
+
+                // set receiving/sending socket to default kamailio socket
+                endpoint->receiving_socket = bind_address;
+                endpoint->sending_socket = bind_address;
             }
 
             if (cancels_dialog(&msg) == 0) {
@@ -233,8 +241,6 @@ int msg_received(void *data) {
             char src_ip[16];
             unsigned short src_port, dst_port;
             char *media_type;
-
-            struct receive_info *ri = (struct receive_info *) d[2];
 
             set_src_ip_and_port(src_ip, &src_port, ri);
 
@@ -312,7 +318,7 @@ int msg_received(void *data) {
             INFO("Sending RTP/RTCP packet to %s:%d\n", dst_endpoint->ip, dst_port);
 #endif
 
-            if (send_packet_to_endpoint(obuf, *dst_ip) == 0) {
+            if (send_packet_to_endpoint(obuf, *dst_ip, dst_endpoint->receiving_socket) == 0) {
                 INFO("RTP packet sent successfully!\n");
             }
 
