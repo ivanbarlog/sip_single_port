@@ -8,6 +8,7 @@
 #include "../../parser/msg_parser.h"
 #include "../../parser/hf.h"
 #include "../../parser/parse_content.h"
+#include "ssp_endpoint.h"
 
 /**
  * Finds binding socket within kamailio's listening sockets
