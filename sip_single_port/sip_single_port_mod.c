@@ -70,10 +70,16 @@ MODULE_VERSION
 /**
  * Head of connections list
  */
-static connection_t *connections_list = NULL;
+connections_list_t *connections_list = NULL;
+struct socket_info *default_bind_address = NULL;
+
+#define _connections_list (connections_list)
+#define _default_bind_address (default_bind_address)
 
 /** module functions */
 static int mod_init(void);
+static int child_init(int);
+static void mod_destroy(void);
 
 int msg_received(void *data);
 
@@ -103,8 +109,8 @@ struct module_exports exports = {
         0,          /* extra processes */
         mod_init,   /* module initialization function */
         0,
-        0,
-        0           /* per-child init function */
+        (destroy_function) mod_destroy,
+        child_init           /* per-child init function */
 };
 
 /**
@@ -115,11 +121,58 @@ static int mod_init(void) {
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
 
-    #ifdef USE_TCP
+    // initialize connection list
+    connections_list = (connections_list_t *) shm_malloc(sizeof(connections_list_t));
+
+    if (connections_list == NULL) {
+        ERR("cannot allocate connections list\n");
+        return -1;
+    }
+    connections_list->lock = lock_alloc();
+
+    if (connections_list->lock == NULL) {
+        ERR("cannot allocate the lock for connection list\n");
+        shm_free(connections_list);
+        return -1;
+    }
+
+    if (lock_init(connections_list->lock) == NULL) {
+        ERR("lock initialization failed\n");
+        shm_free(connections_list);
+        return -1;
+    }
+
+    default_bind_address = bind_address;
+
+#ifdef USE_TCP
 	tcp_set_clone_rcvbuf(1);
 	#endif
 
     return 0;
+}
+
+static int child_init(int rank)
+{
+    if (rank == PROC_INIT || rank == PROC_MAIN || rank == PROC_TCP_MAIN)
+        return 0; /* do nothing for the main process */
+
+    if (_connections_list == NULL) {
+        ERR("connections list not initialized in main process\n");
+        return -1;
+    }
+
+    connections_list = _connections_list;
+    default_bind_address = _default_bind_address;
+
+    return 0;
+}
+
+static void mod_destroy(void)
+{
+    if (connections_list) {
+        lock_destroy(connections_list->lock);
+        shm_free(connections_list);
+    }
 }
 
 int msg_received(void *data) {
@@ -133,11 +186,7 @@ int msg_received(void *data) {
     sip_msg_t msg;
     str *obuf;
 
-    obuf = (str *) pkg_malloc(sizeof(str));
-    if (obuf == NULL) {
-        ERR("cannot allocate pkg memory\n");
-        goto done;
-    }
+    obuf = (str*)data;
 
     obuf->s = s;
     obuf->len = len;
@@ -158,11 +207,13 @@ int msg_received(void *data) {
 
     int msg_type = get_msg_type(&msg);
 
-    int pkg_obuf = 0;
-
     struct receive_info *ri = (struct receive_info *) d[2];
 
+#ifdef DEBUG_BUILD
     print_socket_addresses(bind_address);
+#endif
+
+    lock(connections_list);
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
@@ -184,7 +235,7 @@ int msg_received(void *data) {
                 }
 
                 connection_t *connection = NULL;
-                if (find_connection_by_call_id(shm_call_id, &connection, &connections_list) == -1) {
+                if (find_connection_by_call_id(shm_call_id, &connection, &(connections_list->head)) == -1) {
 
                     // if connection was not found by Call-ID we'll create one
                     connection = create_connection(shm_call_id);
@@ -193,7 +244,7 @@ int msg_received(void *data) {
                         goto done;
                     }
 
-                    int connections_count = push_connection(connection, &connections_list);
+                    int connections_count = push_connection(connection, &(connections_list->head));
                     DBG("%d. connection pushed to connections list\n", connections_count);
                 }
 
@@ -216,26 +267,25 @@ int msg_received(void *data) {
                 endpoint->call_id = connection->call_id;
 
                 // set receiving/sending socket to default kamailio socket
-                endpoint->receiving_socket = bind_address;
-                endpoint->sending_socket = bind_address;
+                endpoint->receiving_socket = default_bind_address;
+                endpoint->sending_socket = default_bind_address;
             }
 
             if (cancels_dialog(&msg) == 0) {
-                remove_connection(shm_call_id, &connections_list);
+                remove_connection(shm_call_id, &(connections_list->head));
             }
 
             if (terminates_dialog(&msg) == 0) {
-                remove_connection(shm_call_id, &connections_list);
+                remove_connection(shm_call_id, &(connections_list->head));
             }
 
 #ifdef DEBUG_BUILD
-        char *cl_table = print_connections_list(&connections_list);
+        char *cl_table = print_connections_list(&(connections_list->head));
             DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
 
             if (cl_table != NULL)
                 free(cl_table);
 #endif
-
             break;
         case SSP_RTP_PACKET: //no break
         case SSP_RTCP_PACKET:
@@ -245,10 +295,16 @@ int msg_received(void *data) {
             unsigned short src_port, dst_port;
             char *media_type;
 
+            if (connections_list->head == NULL)
+            {
+                ERR("connections list not initialized yet");
+                goto done;
+            }
+
             set_src_ip_and_port(src_ip, &src_port, ri);
 
             endpoint_t *dst_endpoint = NULL;
-            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &connections_list) != 0) {
+            if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &(connections_list->head)) != 0) {
                 ERR("Cannot find counter part endpoint\n");
                 goto done;
             }
@@ -276,7 +332,7 @@ int msg_received(void *data) {
                     }
 
                     connection_t *connection;
-                    if (find_connection_by_call_id(pkg_call_id, &connection, &connections_list) == -1) {
+                    if (find_connection_by_call_id(pkg_call_id, &connection, &(connections_list->head)) == -1) {
                         ERR("cannot find connection\n");
                         goto done;
                     }
@@ -304,8 +360,6 @@ int msg_received(void *data) {
                     }
                 }
 
-                pkg_obuf = 1;
-
             } else {
                 ERR("Unknown sip_single_port mode\n");
                 goto done;
@@ -325,16 +379,14 @@ int msg_received(void *data) {
                 INFO("RTP packet sent successfully!\n");
             }
 
-            // when obuf is pointing to pkg memory allocated by us we'll free it
-            if (pkg_obuf == 1 && obuf->s != NULL)
-                pkg_free(obuf->s);
-
             break;
         default:
             goto done;
     }
 
     done:
+
+    unlock(connections_list);
     free_sip_msg(&msg);
 
     if (shm_call_id != NULL)
@@ -346,9 +398,6 @@ int msg_received(void *data) {
     if (pkg_media_type != NULL)
         pkg_free(pkg_media_type);
 
-    if (obuf != NULL)
-        pkg_free(obuf);
-
     return 0;
 }
 
@@ -357,16 +406,27 @@ int msg_sent(void *data) {
     str *obuf;
 
     obuf = (str *) data;
+
     memset(&msg, 0, sizeof(sip_msg_t));
     msg.buf = obuf->s;
     msg.len = obuf->len;
+
+    if (msg.buf == 0 || msg.len == 0) {
+        ERR("empty message\n");
+        goto done;
+    }
 
     if (skip_media_changes(&msg) == -1) {
         DBG("Skipping SDP changes.\n");
         goto done;
     }
 
-    if (change_media_ports(&msg, bind_address) == -1) {
+    if (default_bind_address == NULL) {
+        ERR("default bind address not initialized\n");
+        goto done;
+    }
+
+    if (change_media_ports(&msg, default_bind_address) == -1) {
         ERR("Changing SDP failed.\n");
         goto done;
     }

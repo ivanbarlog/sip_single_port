@@ -13,18 +13,18 @@ static int has_request_and_response_endpoints(connection_t *connection) {
 }
 
 void destroy_connection(connection_t *connection) {
-    if (connection->lock != NULL)
-        lock_dealloc(connection->lock);
 
-    if (connection->call_id != NULL)
+    if (connection->call_id != NULL) {
         shm_free(connection->call_id);
+    }
 
-
-    if (connection->request_endpoint != NULL)
+    if (connection->request_endpoint != NULL) {
         destroy_endpoint(connection->request_endpoint);
+    }
 
-    if (connection->response_endpoint != NULL)
+    if (connection->response_endpoint != NULL) {
         destroy_endpoint(connection->response_endpoint);
+    }
 
     // we don't need to free next, prev, request and response endpoint IP
     // since they are just pointers and will be freed after whole connection is
@@ -51,18 +51,6 @@ connection_t *create_connection(char *call_id) {
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
 
-    connection->lock = NULL;
-
-    connection->lock = lock_alloc();
-
-    if (connection->lock == NULL)
-    {
-        ERR("cannot allocate the lock\n");
-        destroy_connection(connection);
-
-        return NULL;
-    }
-
     shm_copy_string(call_id, strlen(call_id), &(connection->call_id));
 
     return connection;
@@ -79,6 +67,7 @@ int push_connection(connection_t *connection, connection_t **connection_list) {
      */
     if (*connection_list == NULL) {
         *connection_list = tmp;
+
         return ctr;
     }
 
@@ -361,4 +350,12 @@ int remove_connection(char *call_id, connection_t **connection_list) {
 
     INFO("Connection with '%s' call id was not found.\n", call_id);
     return -1;
+}
+
+void lock(connections_list_t *list) {
+    lock_get(list->lock);
+}
+
+void unlock(connections_list_t *list) {
+    lock_release(list->lock);
 }
