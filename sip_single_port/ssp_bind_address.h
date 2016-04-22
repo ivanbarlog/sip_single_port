@@ -10,6 +10,8 @@
 #include "../../parser/parse_content.h"
 #include "ssp_endpoint.h"
 
+void print_socket_addresses(struct socket_info *socket);
+
 /**
  * Finds binding socket within kamailio's listening sockets
  * by IP and port and returns pointer to it

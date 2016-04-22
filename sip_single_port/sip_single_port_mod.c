@@ -63,6 +63,7 @@
 #include "ssp_connection.h"
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
+#include "ssp_bind_address.h"
 
 MODULE_VERSION
 
@@ -160,6 +161,8 @@ int msg_received(void *data) {
     int pkg_obuf = 0;
 
     struct receive_info *ri = (struct receive_info *) d[2];
+
+    print_socket_addresses(bind_address);
 
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
