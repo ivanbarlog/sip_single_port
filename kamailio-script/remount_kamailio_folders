@@ -1,0 +1,9 @@
+#!/bin/bash
+
+
+killall sshfs
+umount -l /usr/local/src/kamailio/
+umount -l /usr/local/etc/kamailio/
+umount -l /usr/local/src/php/
+
+./mount_kamailio_folders

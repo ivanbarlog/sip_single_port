@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# this script will mount folders with kamailio source code and kamailio config
+# from the local host defined in ~/.ssh/config under the hostname dev
+
+# you need to change paths to folders on local machine in the case that you change local host machine
+
+sshfs dev:/var/kamailio_src/ /usr/local/src/kamailio -oauto_cache,reconnect,no_readahead,follow_symlinks,transform_symlinks
+
+sshfs dev:/var/kamailio_config/$(hostname) /usr/local/etc/kamailio/ -oauto_cache,reconnect,no_readahead,follow_symlinks,transform_symlinks
+
+sshfs dev:/var/kamailio_php/ /usr/local/src/php -oauto_cache,reconnect,no_readahead,follow_symlinks,transform_symlinks
