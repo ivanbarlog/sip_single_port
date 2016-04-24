@@ -183,7 +183,7 @@ static struct subst_expr *fill_subst_expr(char *pattern) {
     str subst = {0, 0};
 
     subst.s = pattern;
-    subst.len = strlen(pattern);
+    subst.len = (int) strlen(pattern);
 
     return subst_parser(&subst);
 }

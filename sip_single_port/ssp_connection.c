@@ -51,7 +51,7 @@ connection_t *create_connection(char *call_id) {
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
 
-    shm_copy_string(call_id, strlen(call_id), &(connection->call_id));
+    shm_copy_string(call_id, (int) strlen(call_id), &(connection->call_id));
 
     return connection;
 }

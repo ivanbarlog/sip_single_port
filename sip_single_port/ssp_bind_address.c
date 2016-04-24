@@ -1,12 +1,5 @@
 #include "ssp_bind_address.h"
 
-//#include "../uac/api.h"
-
-/*
- * Bind UAC api
- */
-//static uac_api_t uac;
-
 void print_socket_addresses(struct socket_info *socket)
 {
     INFO("kamailio listens on these adresses:\n");

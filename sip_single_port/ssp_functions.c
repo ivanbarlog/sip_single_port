@@ -9,10 +9,10 @@ msg_type get_msg_type(sip_msg_t *msg) {
         }
     } else {
         //second byte from first line
-        unsigned char byte = msg->buf[1];
+        unsigned char byte = (unsigned char) msg->buf[1];
 
         //if 6th and 5th bit is "10" it's RTCP else RTP
-        if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0) {
+        if ((byte & BIT6) != 0 == 1 && (byte & BIT5) != 0 == 0) {
             return SSP_RTCP_PACKET;
         } else {
             return SSP_RTP_PACKET;
@@ -65,7 +65,7 @@ int get_msg_body(struct sip_msg *msg, str *body) {
         return -1;
     }
 
-    body->len = msg->len - (body->s - msg->buf);
+    body->len = (int) (msg->len - (body->s - msg->buf));
 
     if (!msg->content_length) {
         return -1;
@@ -87,7 +87,7 @@ int shm_copy_string(const char *original_string, int original_length, char **new
     }
 
     // copy original string to new string
-    memcpy(*new_string, original_string, original_length);
+    memcpy(*new_string, original_string, (size_t) original_length);
     // end new string with null character
     (*new_string)[original_length] = '\0';
 
@@ -104,7 +104,7 @@ int pkg_copy_string(const char *original_string, int original_length, char **new
     }
 
     // copy original string to new string
-    memcpy(*new_string, original_string, original_length);
+    memcpy(*new_string, original_string, (size_t) original_length);
     // end new string with null character
     (*new_string)[original_length] = '\0';
 

@@ -1,7 +1,8 @@
 #include "ssp_endpoint.h"
 
 static char *parse_creator_ip(sip_msg_t *msg) {
-    unsigned int a, b, c, d, success;
+    int  success;
+    unsigned int a, b, c, d;
     char *creator;
     str sdp = {0, 0};
 
@@ -50,10 +51,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     endpoint->sibling = NULL;
     endpoint->streams = NULL;
 
-    endpoint->receiving_socket = NULL;
-    endpoint->sending_socket = NULL;
-    endpoint->tmp_receiving_socket = NULL;
-    endpoint->tmp_sending_socket = NULL;
+    endpoint->socket = NULL;
 
     if (parse_sdp(msg) != 0) {
         ERR("Cannot parse SDP or body not present, destroying endpoint\n");
@@ -70,7 +68,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
         return NULL;
     }
 
-    shm_copy_string(creator_ip, strlen(creator_ip), &(endpoint->ip));
+    shm_copy_string(creator_ip, (int) strlen(creator_ip), &(endpoint->ip));
 
     // free memory used by creator_ip
     free(creator_ip);

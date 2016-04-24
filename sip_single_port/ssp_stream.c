@@ -1,6 +1,9 @@
 #include "ssp_stream.h"
 
 static void destroy_stream(endpoint_stream_t *stream) {
+    if (stream->temporary != NULL)
+        shm_free(stream->temporary);
+
     if (stream->media != NULL)
         shm_free(stream->media);
 
@@ -9,9 +12,6 @@ static void destroy_stream(endpoint_stream_t *stream) {
 
     if (stream->rtcp_port != NULL)
         shm_free(stream->rtcp_port);
-
-    // we don't need to free str properties
-    // since they are just pointers and will be freed after whole stream is
 
     shm_free(stream);
 }
@@ -48,10 +48,20 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
                 return -1;
             }
 
+            tmp->temporary = NULL;
             tmp->media = NULL;
             tmp->port = NULL;
             tmp->rtcp_port = NULL;
             tmp->next = NULL;
+
+            tmp->temporary = (int) shm_malloc(sizeof(int));
+            if (tmp->temporary == NULL) {
+                ERR("cannot allocate shm memory.\n");
+                destroy_stream(tmp);
+
+                return -1;
+            }
+            tmp->temporary = 0;
 
             if (shm_copy_string(stc->media.s, stc->media.len, &(tmp->media)) == -1) {
                 ERR("cannot copy string.\n");
@@ -220,7 +230,7 @@ int get_stream_port(endpoint_stream_t *streams, char *type, unsigned short *port
 
     while (current != NULL) {
         if (strcmp(current->media, type) == 0) {
-            *port = (unsigned int) atoi(current->port);
+            *port = (unsigned short) atoi(current->port);
 
             return 0;
         }
@@ -265,7 +275,7 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short 
 
         if (strcmp(current->media, type) == 0) {
 
-            *port = get_rtcp_port(current);
+            *port = (unsigned short) get_rtcp_port(current);
 
             return 0;
         }
