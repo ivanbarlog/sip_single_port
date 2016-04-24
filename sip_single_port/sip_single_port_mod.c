@@ -78,7 +78,9 @@ struct socket_info *default_bind_address = NULL;
 
 /** module functions */
 static int mod_init(void);
+
 static int child_init(int);
+
 static void mod_destroy(void);
 
 int msg_received(void *data);
@@ -94,14 +96,21 @@ static int mode = SINGLE_PROXY_MODE;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
-        {0, 0,                   0}
+        {0, 0, 0}
+};
+
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
+
+static cmd_export_t cmds[] = {
+        {"add_in_rule", (cmd_function) m_add_in_rule, 4, NULL, 0, ANY_ROUTE}, //fixup_spve_null
+        {0, 0, 0, 0, 0, 0}
 };
 
 /** module exports */
 struct module_exports exports = {
         "sip_single_port",
         DEFAULT_DLFLAGS, /* dlopen flags */
-        0,
+        cmds,
         params, /* params */
         0,          /* exported statistics */
         0,          /* exported MI functions */
@@ -145,14 +154,13 @@ static int mod_init(void) {
     default_bind_address = bind_address;
 
 #ifdef USE_TCP
-	tcp_set_clone_rcvbuf(1);
-	#endif
+    tcp_set_clone_rcvbuf(1);
+#endif
 
     return 0;
 }
 
-static int child_init(int rank)
-{
+static int child_init(int rank) {
     if (rank == PROC_INIT || rank == PROC_MAIN || rank == PROC_TCP_MAIN)
         return 0; /* do nothing for the main process */
 
@@ -167,8 +175,7 @@ static int child_init(int rank)
     return 0;
 }
 
-static void mod_destroy(void)
-{
+static void mod_destroy(void) {
     if (connections_list) {
         lock_destroy(connections_list->lock);
         shm_free(connections_list);
@@ -186,7 +193,7 @@ int msg_received(void *data) {
     sip_msg_t msg;
     str *obuf;
 
-    obuf = (str*)data;
+    obuf = (str *) data;
 
     obuf->s = s;
     obuf->len = len;
@@ -295,8 +302,7 @@ int msg_received(void *data) {
             unsigned short src_port, dst_port;
             char *media_type;
 
-            if (connections_list->head == NULL)
-            {
+            if (connections_list->head == NULL) {
                 ERR("connections list not initialized yet");
                 goto done;
             }
@@ -437,4 +443,31 @@ int msg_sent(void *data) {
     free_sip_msg(&msg);
 
     return 0;
+}
+
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+
+    str from_ip = {0, 0};
+    str from_port = {0, 0};
+    str to_ip = {0, 0};
+    str to_port = {0, 0};
+
+    if (f_ip == 0 || f_port == 0 || t_ip == 0 || t_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
+
+    from_ip.s = f_ip;
+    from_ip.len = (int)strlen(f_ip);
+    from_port.s = f_port;
+    from_port.len = (int)strlen(f_port);
+    to_ip.s = t_ip;
+    to_ip.len = (int)strlen(t_ip);
+    to_port.s = t_port;
+    to_port.len = (int)strlen(t_port);
+
+    // add new in rule
+
+    return 1;
 }
