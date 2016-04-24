@@ -1,9 +1,7 @@
 #include "ssp_stream.h"
 
-static void destroy_stream(endpoint_stream_t *stream) {
-    if (stream->temporary != NULL)
-        shm_free(stream->temporary);
-
+static void destroy_stream(endpoint_stream_t *stream)
+{
     if (stream->media != NULL)
         shm_free(stream->media);
 
@@ -48,19 +46,11 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
                 return -1;
             }
 
-            tmp->temporary = NULL;
             tmp->media = NULL;
             tmp->port = NULL;
             tmp->rtcp_port = NULL;
             tmp->next = NULL;
 
-            tmp->temporary = (int) shm_malloc(sizeof(int));
-            if (tmp->temporary == NULL) {
-                ERR("cannot allocate shm memory.\n");
-                destroy_stream(tmp);
-
-                return -1;
-            }
             tmp->temporary = 0;
 
             if (shm_copy_string(stc->media.s, stc->media.len, &(tmp->media)) == -1) {
