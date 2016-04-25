@@ -1,4 +1,5 @@
 #include "ssp_connection.h"
+#include "ssp_stream.h"
 
 static int has_request_and_response_endpoints(connection_t *connection) {
     if (connection->request_endpoint == NULL) {
@@ -288,7 +289,142 @@ static int process_endpoints(
     return -1;
 }
 
-int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list) {
+static int add_temporary_streams(endpoint_t *endpoint, char *port) {
+    endpoint_stream_t *current;
+    current = endpoint->streams;
+
+    endpoint_stream_t *temporary = NULL;
+    endpoint_stream_t *next = NULL;
+
+    while (current != NULL) {
+        next = current->next;
+
+        temporary = (endpoint_stream_t *) shm_malloc(sizeof(endpoint_stream_t));
+        temporary->temporary = 1;
+
+        if (shm_copy_string(current->media, (int) strlen(current->media), &(temporary->media)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        if (shm_copy_string(port, (int) strlen(port), &(temporary->port)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        if (shm_copy_string(port, (int) strlen(port), &(temporary->rtcp_port)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        current->next = temporary;
+        temporary->next = next;
+
+        current = next;
+        temporary = NULL;
+    }
+
+    return 0;
+}
+
+int add_new_in_rule(
+        const char *ip,
+        short unsigned int port,
+        char *new_port,
+        connection_t **connection_list
+) {
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    endpoint_t *endpoint = NULL;
+    current = *connection_list;
+
+    int ctr = 0;
+
+    while (current != NULL) {
+
+        if (current->request_endpoint &&
+            process_endpoints(current->request_endpoint, current->response_endpoint, &endpoint, ip, port) == 0) {
+            add_temporary_streams(endpoint, new_port);
+            ctr++;
+        }
+
+        if (current->response_endpoint &&
+            process_endpoints(current->response_endpoint, current->request_endpoint, &endpoint, ip, port) == 0) {
+            add_temporary_streams(endpoint, new_port);
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    if (ctr > 0) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int change_socket_for_endpoints(
+        struct socket_info *old_socket,
+        struct socket_info *new_socket,
+        connection_t **connection_list
+) {
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    current = *connection_list;
+
+    int ctr = -1;
+
+    while (current != NULL) {
+
+#ifdef DEBUG_BUILD
+        INFO("Call-ID: %s\n", current->call_id);
+
+        if (current->request_endpoint) {
+            INFO("request endpoint: %p == %p | %d\n", current->request_endpoint->socket, old_socket, current->request_endpoint->socket == old_socket);
+        }
+
+        if (current->response_endpoint) {
+            INFO("response endpoint: %p == %p | %d\n", current->response_endpoint->socket, old_socket, current->response_endpoint->socket == old_socket);
+        }
+#endif
+
+        if (current->request_endpoint && current->request_endpoint->socket == old_socket) {
+            current->request_endpoint->socket = new_socket;
+            ctr++;
+        }
+
+        if (current->response_endpoint && current->request_endpoint->socket == old_socket) {
+            current->response_endpoint->socket = new_socket;
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    return ctr;
+}
+
+int find_counter_endpoint(
+        const char *ip,
+        short unsigned int port,
+        endpoint_t **endpoint,
+      connection_t **connection_list
+) {
     *endpoint = NULL;
 
     if (*connection_list == NULL) {

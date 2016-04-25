@@ -35,6 +35,8 @@ typedef struct endpoint_stream {
 
 } endpoint_stream_t;
 
+void destroy_stream(endpoint_stream_t *stream);
+
 /**
  * Frees memory allocated by endpoint streams
  */

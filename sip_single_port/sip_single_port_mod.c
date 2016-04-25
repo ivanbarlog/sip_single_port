@@ -43,7 +43,7 @@
  * CONNECTIONS LIST will be shown but it contains memory leaks
  * so it's not suitable for production
  */
-//#define DEBUG_BUILD 1
+#define DEBUG_BUILD 1
 
 #include <stdio.h>
 #include <string.h>
@@ -71,10 +71,8 @@ MODULE_VERSION
  * Head of connections list
  */
 connections_list_t *connections_list = NULL;
-struct socket_info *default_bind_address = NULL;
 
 #define _connections_list (connections_list)
-#define _default_bind_address (default_bind_address)
 
 /** module functions */
 static int mod_init(void);
@@ -100,9 +98,11 @@ static param_export_t params[] = {
 };
 
 static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
+static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
 
 static cmd_export_t cmds[] = {
-        {"add_in_rule", (cmd_function) m_add_in_rule, 4, NULL, 0, ANY_ROUTE}, //fixup_spve_null
+        {"add_in_rule", (cmd_function) m_add_in_rule, 4, NULL, 0, ANY_ROUTE},
+        {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
         {0, 0, 0, 0, 0, 0}
 };
 
@@ -151,8 +151,6 @@ static int mod_init(void) {
         return -1;
     }
 
-    default_bind_address = bind_address;
-
 #ifdef USE_TCP
     tcp_set_clone_rcvbuf(1);
 #endif
@@ -170,7 +168,6 @@ static int child_init(int rank) {
     }
 
     connections_list = _connections_list;
-    default_bind_address = _default_bind_address;
 
     return 0;
 }
@@ -217,7 +214,7 @@ int msg_received(void *data) {
     struct receive_info *ri = (struct receive_info *) d[2];
 
 #ifdef DEBUG_BUILD
-    print_socket_addresses(bind_address);
+    print_socket_addresses(get_first_socket());
 #endif
 
     lock(connections_list);
@@ -274,7 +271,7 @@ int msg_received(void *data) {
                 endpoint->call_id = connection->call_id;
 
                 // set sending socket to default kamailio socket
-                endpoint->socket = default_bind_address;
+                endpoint->socket = get_first_socket();
             }
 
             if (cancels_dialog(&msg) == 0) {
@@ -426,12 +423,7 @@ int msg_sent(void *data) {
         goto done;
     }
 
-    if (default_bind_address == NULL) {
-        ERR("default bind address not initialized\n");
-        goto done;
-    }
-
-    if (change_media_ports(&msg, default_bind_address) == -1) {
+    if (change_media_ports(&msg, get_first_socket()) == -1) {
         ERR("Changing SDP failed.\n");
         goto done;
     }
@@ -445,6 +437,29 @@ int msg_sent(void *data) {
 }
 
 static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+
+    if (f_ip == 0 || f_port == 0 || t_ip == 0 || t_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
+
+    lock(connections_list);
+
+    // find all endpoints matching IP:port and add temporary streams
+    if (add_new_in_rule(f_ip, (unsigned short) atoi(f_port), t_port, &(connections_list->head)) == -1) {
+        ERR("there aren't no endpoints where can be added the new rule.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    unlock(connections_list);
+
+    return 1;
+}
+
+static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
 
     str from_ip = {0, 0};
     str from_port = {0, 0};
@@ -466,11 +481,44 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, c
     to_port.s = t_port;
     to_port.len = (int)strlen(t_port);
 
-    // add new in rule
-
     lock(connections_list);
 
-    // find all endpoints matching IP:port and add temporary streams
+    struct socket_info *sockets = get_first_socket();
+
+    struct socket_info *old_socket;
+    struct socket_info *new_socket;
+    old_socket = get_bind_address(from_ip, from_port, &sockets);
+
+    if (old_socket == NULL) {
+        ERR(
+                "cannot find old socket by %.*s:%.*s\n",
+                from_ip.len, from_ip.s,
+                from_port.len, from_port.s
+        );
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    new_socket = get_bind_address(to_ip, to_port, &sockets);
+
+    if (new_socket == NULL) {
+        ERR(
+                "cannot find new socket by %.*s:%.*s\n",
+                to_ip.len, to_ip.s,
+                to_port.len, to_port.s
+        );
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    if (change_socket_for_endpoints(old_socket, new_socket, &(connections_list->head)) == -1) {
+        ERR("zero sockets were changed.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
 
     unlock(connections_list);
 

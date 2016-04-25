@@ -110,5 +110,17 @@ void lock(connections_list_t *list);
  */
 void unlock(connections_list_t *list);
 
+int add_new_in_rule(
+        const char *ip,
+        short unsigned int port,
+        char *new_port,
+        connection_t **connection_list
+);
+
+int change_socket_for_endpoints(
+        struct socket_info *old_socket,
+        struct socket_info *new_socket,
+        connection_t **connection_list
+);
 
 #endif //KAMAILIO_SSP_CONNECTION_H

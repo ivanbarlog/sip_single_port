@@ -1,6 +1,6 @@
 #include "ssp_stream.h"
 
-static void destroy_stream(endpoint_stream_t *stream)
+void destroy_stream(endpoint_stream_t *stream)
 {
     if (stream->media != NULL)
         shm_free(stream->media);
