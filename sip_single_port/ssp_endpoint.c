@@ -112,10 +112,13 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n%s\n",
+            "%s\n | %-39s |\n%s\n%s\n | %.*s:%.*s |\n",
             get_hdr_line(),
             endpoint_info,
-            streams_info
+            streams_info,
+            get_hdr_line(),
+            endpoint->socket->address_str.len, endpoint->socket->address_str.s,
+            endpoint->socket->port_no_str.len, endpoint->socket->port_no_str.s
     );
 
     if (endpoint_info != NULL)

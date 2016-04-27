@@ -257,7 +257,7 @@ int get_counter_port(const char *ip, char *type, connection_t *connection, unsig
     return 0;
 }
 
-static int process_endpoints(
+static int find_sibling_endpoint_by_ip_and_port(
         endpoint_t *endpoint1,
         endpoint_t *endpoint2,
         endpoint_t **endpoint,
@@ -333,6 +333,39 @@ static int add_temporary_streams(endpoint_t *endpoint, char *port) {
     return 0;
 }
 
+static int remove_temporary_streams(endpoint_t *endpoint) {
+    endpoint_stream_t *current;
+    current = endpoint->streams;
+
+    endpoint_stream_t *temporary = NULL;
+    endpoint_stream_t *prev = current;
+    current = current->next;
+
+    int ctr = -1;
+
+    do {
+        // switch temporary and old streams
+        current->temporary = !current->temporary;
+
+        if (current->temporary == 1) {
+            temporary = current;
+            current = current->next;
+            prev->next = current;
+
+            if (temporary != NULL) {
+                shm_free(temporary);
+                ctr++;
+            }
+        }
+
+        prev = current;
+        current = current->next;
+
+    } while (current != NULL);
+
+    return ctr;
+}
+
 int add_new_in_rule(
         const char *ip,
         short unsigned int port,
@@ -353,14 +386,61 @@ int add_new_in_rule(
     while (current != NULL) {
 
         if (current->request_endpoint &&
-            process_endpoints(current->request_endpoint, current->response_endpoint, &endpoint, ip, port) == 0) {
-            add_temporary_streams(endpoint, new_port);
+                find_sibling_endpoint_by_ip_and_port(
+                        current->request_endpoint,
+                        current->response_endpoint,
+                        &endpoint,
+                        ip,
+                        port
+                ) == 0) {
+            add_temporary_streams(endpoint->sibling, new_port);
             ctr++;
         }
 
         if (current->response_endpoint &&
-            process_endpoints(current->response_endpoint, current->request_endpoint, &endpoint, ip, port) == 0) {
-            add_temporary_streams(endpoint, new_port);
+                find_sibling_endpoint_by_ip_and_port(
+                        current->response_endpoint,
+                        current->request_endpoint,
+                        &endpoint,
+                        ip,
+                        port
+                ) == 0) {
+            add_temporary_streams(endpoint->sibling, new_port);
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    if (ctr > 0) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int remove_temporary_rules(connection_t **connection_list)
+{
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    endpoint_t *endpoint = NULL;
+    current = *connection_list;
+
+    int ctr = 0;
+
+    while (current != NULL) {
+
+        if (current->request_endpoint) {
+            remove_temporary_streams(endpoint);
+            ctr++;
+        }
+
+        if (current->response_endpoint) {
+            remove_temporary_streams(endpoint);
             ctr++;
         }
 
@@ -441,12 +521,22 @@ int find_counter_endpoint(
         if (has_request_and_response_endpoints(current) == 0) {
 
             DBG("Response endpoint streams\n");
-            if (process_endpoints(current->request_endpoint, current->response_endpoint, endpoint, ip, port) == 0) {
+            if (find_sibling_endpoint_by_ip_and_port(
+                    current->request_endpoint,
+                    current->response_endpoint,
+                    endpoint,
+                    ip,
+                    port) == 0) {
                 return 0;
             }
 
             DBG("Request endpoint streams\n");
-            if (process_endpoints(current->response_endpoint, current->request_endpoint, endpoint, ip, port) == 0) {
+            if (find_sibling_endpoint_by_ip_and_port(
+                    current->response_endpoint,
+                    current->request_endpoint,
+                    endpoint,
+                    ip,
+                    port) == 0) {
                 return 0;
             }
         }

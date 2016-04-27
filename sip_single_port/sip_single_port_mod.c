@@ -43,7 +43,7 @@
  * CONNECTIONS LIST will be shown but it contains memory leaks
  * so it's not suitable for production
  */
-#define DEBUG_BUILD 1
+//#define DEBUG_BUILD 1
 
 #include <stdio.h>
 #include <string.h>
@@ -98,10 +98,12 @@ static param_export_t params[] = {
 };
 
 static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
+static int m_remove_in_rule(sip_msg_t *msg);
 static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
 
 static cmd_export_t cmds[] = {
         {"add_in_rule", (cmd_function) m_add_in_rule, 4, NULL, 0, ANY_ROUTE},
+        {"remove_in_rule", (cmd_function) m_remove_in_rule, 0, NULL, 0, ANY_ROUTE},
         {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
         {0, 0, 0, 0, 0, 0}
 };
@@ -436,7 +438,20 @@ int msg_sent(void *data) {
     return 0;
 }
 
+/**
+ * This function is called with the pair of remote old IP:port and new IP:port
+ * eg. if local IP:port is 192.168.0.32:5060 and remote is 192.168.0.31:5060 and we want switch to 5070
+ * this function will be called with four arguments: (192.168.0.31, 5060, 192.168.0.31, 5070)
+ */
 static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+
+    INFO("ADD_IN_RULE(%s, %s, %s, %s)\n", f_ip, f_port, t_ip, t_port);
+
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
 
     if (f_ip == 0 || f_port == 0 || t_ip == 0 || t_port == 0) {
         ERR("You must provide values for all parameters.\n");
@@ -448,11 +463,53 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, c
 
     // find all endpoints matching IP:port and add temporary streams
     if (add_new_in_rule(f_ip, (unsigned short) atoi(f_port), t_port, &(connections_list->head)) == -1) {
-        ERR("there aren't no endpoints where can be added the new rule.\n");
+        ERR("there are no endpoints where can be added the new rule.\n");
         unlock(connections_list);
 
         return -1;
     }
+
+    INFO("ADD_IN_RULE - rule ADDed\n");
+
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+
+
+    unlock(connections_list);
+
+    return 1;
+}
+
+static int m_remove_in_rule(sip_msg_t *msg) {
+
+    INFO("REMOVE_IN_RULE()\n");
+
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+
+    lock(connections_list);
+
+    // find all endpoints matching IP:port and add temporary streams
+    if (remove_temporary_rules(&(connections_list->head)) == -1) {
+        ERR("there are no endpoints where can be removed temporary rules.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    INFO("REMOVE_IN_RULE - rule REMOVEd\n");
+
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
 
     unlock(connections_list);
 
@@ -460,6 +517,15 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, c
 }
 
 static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+
+    INFO("CHANGE_SOCKET(%s, %s, %s, %s)\n", f_ip, f_port, t_ip, t_port);
+
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+
 
     str from_ip = {0, 0};
     str from_port = {0, 0};
@@ -519,6 +585,14 @@ static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip,
 
         return -1;
     }
+
+    INFO("CHANGE_SOCKET - socket CHANGEd\n");
+
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
 
     unlock(connections_list);
 
