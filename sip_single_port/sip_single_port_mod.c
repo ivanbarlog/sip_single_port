@@ -71,14 +71,14 @@ MODULE_VERSION
  * Head of connections list
  */
 connections_list_t *connections_list = NULL;
-struct socket_info *default_bind_address = NULL;
 
 #define _connections_list (connections_list)
-#define _default_bind_address (default_bind_address)
 
 /** module functions */
 static int mod_init(void);
+
 static int child_init(int);
+
 static void mod_destroy(void);
 
 int msg_received(void *data);
@@ -94,14 +94,37 @@ static int mode = SINGLE_PROXY_MODE;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
-        {0, 0,                   0}
+        {0, 0, 0}
+};
+
+/**
+ * Adds rule for incoming packets
+ * eg. functions finds endpoint by provided IP:port
+ * and adds temporary streams with provided new port
+ */
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_port);
+/**
+ * Finds endpoint by provided IP:port and replace old rules with temporary one
+ */
+static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port);
+/**
+ * Finds endpoint by provided IP:port (s_ip:s_port) and replace it's sending socket with socket
+ * matching provided IP:port (t_ip:t_port)
+ */
+static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port);
+
+static cmd_export_t cmds[] = {
+        {"add_in_rule", (cmd_function) m_add_in_rule, 3, NULL, 0, ANY_ROUTE},
+        {"remove_in_rule", (cmd_function) m_remove_in_rule, 2, NULL, 0, ANY_ROUTE},
+        {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
+        {0, 0, 0, 0, 0, 0}
 };
 
 /** module exports */
 struct module_exports exports = {
         "sip_single_port",
         DEFAULT_DLFLAGS, /* dlopen flags */
-        0,
+        cmds,
         params, /* params */
         0,          /* exported statistics */
         0,          /* exported MI functions */
@@ -142,17 +165,14 @@ static int mod_init(void) {
         return -1;
     }
 
-    default_bind_address = bind_address;
-
 #ifdef USE_TCP
-	tcp_set_clone_rcvbuf(1);
-	#endif
+    tcp_set_clone_rcvbuf(1);
+#endif
 
     return 0;
 }
 
-static int child_init(int rank)
-{
+static int child_init(int rank) {
     if (rank == PROC_INIT || rank == PROC_MAIN || rank == PROC_TCP_MAIN)
         return 0; /* do nothing for the main process */
 
@@ -162,13 +182,11 @@ static int child_init(int rank)
     }
 
     connections_list = _connections_list;
-    default_bind_address = _default_bind_address;
 
     return 0;
 }
 
-static void mod_destroy(void)
-{
+static void mod_destroy(void) {
     if (connections_list) {
         lock_destroy(connections_list->lock);
         shm_free(connections_list);
@@ -186,7 +204,7 @@ int msg_received(void *data) {
     sip_msg_t msg;
     str *obuf;
 
-    obuf = (str*)data;
+    obuf = (str *) data;
 
     obuf->s = s;
     obuf->len = len;
@@ -198,7 +216,7 @@ int msg_received(void *data) {
 
     memset(&msg, 0, sizeof(sip_msg_t));
     msg.buf = obuf->s;
-    msg.len = obuf->len;
+    msg.len = (unsigned int) obuf->len;
 
     str str_call_id;
     char *shm_call_id = NULL;
@@ -210,7 +228,7 @@ int msg_received(void *data) {
     struct receive_info *ri = (struct receive_info *) d[2];
 
 #ifdef DEBUG_BUILD
-    print_socket_addresses(bind_address);
+    print_socket_addresses(get_first_socket());
 #endif
 
     lock(connections_list);
@@ -266,9 +284,8 @@ int msg_received(void *data) {
                 // add Call-ID to endpoint for quicker searching
                 endpoint->call_id = connection->call_id;
 
-                // set receiving/sending socket to default kamailio socket
-                endpoint->receiving_socket = default_bind_address;
-                endpoint->sending_socket = default_bind_address;
+                // set sending socket to default kamailio socket
+                endpoint->socket = get_first_socket();
             }
 
             if (cancels_dialog(&msg) == 0) {
@@ -295,13 +312,19 @@ int msg_received(void *data) {
             unsigned short src_port, dst_port;
             char *media_type;
 
-            if (connections_list->head == NULL)
-            {
+            if (connections_list->head == NULL) {
                 ERR("connections list not initialized yet");
                 goto done;
             }
 
             set_src_ip_and_port(src_ip, &src_port, ri);
+
+#ifdef DEBUG_BUILD
+            INFO(
+                    "Received RTP/RTCP packet from %s:%d\n",
+                    src_ip, src_port
+            );
+#endif
 
             endpoint_t *dst_endpoint = NULL;
             if (find_counter_endpoint(src_ip, src_port, &dst_endpoint, &(connections_list->head)) != 0) {
@@ -320,7 +343,7 @@ int msg_received(void *data) {
             } else if (mode == DUAL_PROXY_MODE) {
 
                 int tag_length;
-                unsigned char first_byte = obuf->s[0];
+                unsigned char first_byte = (unsigned char) obuf->s[0];
 
                 // the RTP/RTCP packet is already modified
                 if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
@@ -372,10 +395,15 @@ int msg_received(void *data) {
             }
 
 #ifdef DEBUG_BUILD
-            INFO("Sending RTP/RTCP packet to %s:%d\n", dst_endpoint->ip, dst_port);
+            INFO(
+                    "Sending RTP/RTCP packet to %s:%d via %.*s:%.*s socket\n",
+                    dst_endpoint->ip, dst_port,
+                    dst_endpoint->socket->address_str.len, dst_endpoint->socket->address_str.s,
+                    dst_endpoint->socket->port_no_str.len, dst_endpoint->socket->port_no_str.s
+            );
 #endif
 
-            if (send_packet_to_endpoint(obuf, *dst_ip, dst_endpoint->receiving_socket) == 0) {
+            if (send_packet_to_endpoint(obuf, *dst_ip, dst_endpoint->socket) == 0) {
                 INFO("RTP packet sent successfully!\n");
             }
 
@@ -409,7 +437,7 @@ int msg_sent(void *data) {
 
     memset(&msg, 0, sizeof(sip_msg_t));
     msg.buf = obuf->s;
-    msg.len = obuf->len;
+    msg.len = (unsigned int) obuf->len;
 
     if (msg.buf == 0 || msg.len == 0) {
         ERR("empty message\n");
@@ -421,12 +449,7 @@ int msg_sent(void *data) {
         goto done;
     }
 
-    if (default_bind_address == NULL) {
-        ERR("default bind address not initialized\n");
-        goto done;
-    }
-
-    if (change_media_ports(&msg, default_bind_address) == -1) {
+    if (change_media_ports(&msg, get_first_socket()) == -1) {
         ERR("Changing SDP failed.\n");
         goto done;
     }
@@ -437,4 +460,149 @@ int msg_sent(void *data) {
     free_sip_msg(&msg);
 
     return 0;
+}
+
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_port) {
+
+    if (f_ip == 0 || f_port == 0 || t_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
+
+#ifdef DEBUG_BUILD
+    INFO("ADD_IN_RULE()\n");
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    lock(connections_list);
+
+    // find all endpoints matching IP:port and add temporary streams
+    if (add_new_in_rule(f_ip, (unsigned short) atoi(f_port), t_port, &(connections_list->head)) == -1) {
+        ERR("there are no endpoints where can be added the new rule.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    unlock(connections_list);
+
+#ifdef DEBUG_BUILD
+    INFO("ADD_IN_RULE - rule ADDed\n");
+
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    return 1;
+}
+
+static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port) {
+
+    if (s_ip == 0 || s_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
+
+#ifdef DEBUG_BUILD
+    INFO("REMOVE_IN_RULE()\n");
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    lock(connections_list);
+
+    // find all endpoints matching IP:port and add temporary streams
+    if (remove_temporary_rules(s_ip, (unsigned short) atoi(s_port), &(connections_list->head)) == -1) {
+        ERR("there are no endpoints where can be removed temporary rules.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    unlock(connections_list);
+
+#ifdef DEBUG_BUILD
+    INFO("REMOVE_IN_RULE - rule REMOVEd\n");
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    return 1;
+}
+
+static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port) {
+
+#ifdef DEBUG_BUILD
+    char *cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    str to_ip = {0, 0};
+    str to_port = {0, 0};
+
+    if (s_ip == 0 || s_port == 0 || t_ip == 0 || t_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
+
+    to_ip.s = t_ip;
+    to_ip.len = (int) strlen(t_ip);
+    to_port.s = t_port;
+    to_port.len = (int) strlen(t_port);
+
+    struct socket_info *sockets = get_first_socket();
+    struct socket_info *new_socket;
+
+    new_socket = get_bind_address(to_ip, to_port, &sockets);
+
+    if (new_socket == NULL) {
+        ERR(
+                "cannot find new socket by %.*s:%.*s\n",
+                to_ip.len, to_ip.s,
+                to_port.len, to_port.s
+        );
+
+        return -1;
+    }
+
+    lock(connections_list);
+
+    if (change_socket_for_endpoints(s_ip, (unsigned short) atoi(s_port), new_socket, &(connections_list->head)) == -1) {
+        ERR("zero sockets were changed.\n");
+        unlock(connections_list);
+
+        return -1;
+    }
+
+    unlock(connections_list);
+
+#ifdef DEBUG_BUILD
+    INFO("CHANGE_SOCKET - socket CHANGEd\n");
+    cl_table = print_connections_list(&(connections_list->head));
+    DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
+
+    if (cl_table != NULL)
+        free(cl_table);
+#endif
+
+    return 1;
 }

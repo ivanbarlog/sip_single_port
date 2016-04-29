@@ -1,12 +1,5 @@
 #include "ssp_bind_address.h"
 
-//#include "../uac/api.h"
-
-/*
- * Bind UAC api
- */
-//static uac_api_t uac;
-
 void print_socket_addresses(struct socket_info *socket)
 {
     INFO("kamailio listens on these adresses:\n");
@@ -41,55 +34,22 @@ struct socket_info *get_bind_address(str address_str, str port_no_str, struct so
     return NULL;
 }
 
-int add_receiving_bind_address(endpoint_t *endpoint, struct socket_info *bind_address) {
-    if (endpoint->tmp_receiving_socket != NULL) {
-        ERR("Temporary receiving socket already set.\n");
-
-        return -1;
-    }
-
-    endpoint->tmp_receiving_socket = bind_address;
-
+int add_receiving_bind_address(endpoint_t *endpoint, struct socket_info *bind_address)
+{
     return 0;
 }
 
 int add_sending_bind_address(endpoint_t *endpoint, struct socket_info *bind_address)
 {
-    if (endpoint->tmp_sending_socket != NULL) {
-        ERR("Temporary sending socket already set.\n");
-
-        return -1;
-    }
-
-    endpoint->tmp_sending_socket = bind_address;
-
     return 0;
 }
 
 int swap_receiving_bind_address(endpoint_t *endpoint)
 {
-    if (endpoint->tmp_receiving_socket == NULL) {
-        ERR("Temporary receiving socket not set yet.\n");
-
-        return -1;
-    }
-
-    endpoint->receiving_socket = endpoint->tmp_receiving_socket;
-    endpoint->tmp_receiving_socket = NULL;
-
     return 0;
 }
 
 int swap_sending_bind_address(endpoint_t *endpoint)
 {
-    if (endpoint->tmp_sending_socket == NULL) {
-        ERR("Temporary sending socket not set yet.\n");
-
-        return -1;
-    }
-
-    endpoint->sending_socket = endpoint->tmp_sending_socket;
-    endpoint->tmp_sending_socket = NULL;
-
     return 0;
 }

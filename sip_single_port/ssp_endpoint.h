@@ -25,13 +25,8 @@ typedef struct endpoint {
     char *ip;
     char *call_id;
 
-    /* sockets for receiving and sending packets */
-    struct socket_info *receiving_socket;
-    struct socket_info *sending_socket;
-
-    /* temporary sockets used used in handover */
-    struct socket_info *tmp_receiving_socket;
-    struct socket_info *tmp_sending_socket;
+    /* socket for sending packets */
+    struct socket_info *socket;
 
     /* list of all media streams */
     struct endpoint_stream *streams;

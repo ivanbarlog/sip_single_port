@@ -51,7 +51,7 @@ connection_t *create_connection(char *call_id) {
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
 
-    shm_copy_string(call_id, strlen(call_id), &(connection->call_id));
+    shm_copy_string(call_id, (int) strlen(call_id), &(connection->call_id));
 
     return connection;
 }
@@ -256,7 +256,7 @@ int get_counter_port(const char *ip, char *type, connection_t *connection, unsig
     return 0;
 }
 
-static int process_endpoints(
+static int find_sibling_endpoint_by_ip_and_port(
         endpoint_t *endpoint1,
         endpoint_t *endpoint2,
         endpoint_t **endpoint,
@@ -288,7 +288,228 @@ static int process_endpoints(
     return -1;
 }
 
-int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **endpoint, connection_t **connection_list) {
+static int match_endpoint(
+        endpoint_t *endpoint,
+        const char *ip,
+        short unsigned int port
+) {
+    if (strcmp(endpoint->ip, ip) != 0) {
+        INFO("IP not matching.\n");
+
+        return -1;
+    }
+
+    if (contain_port(endpoint->streams, &port) != 0) {
+        INFO("port not matching.\n");
+
+        return -1;
+    }
+
+    DBG("IP:port matching\n");
+
+    return 0;
+}
+
+static int add_temporary_streams(endpoint_t *endpoint, char *port) {
+    endpoint_stream_t *current;
+    current = endpoint->streams;
+
+    endpoint_stream_t *temporary = NULL;
+    endpoint_stream_t *next = NULL;
+
+    while (current != NULL) {
+        next = current->next;
+
+        temporary = (endpoint_stream_t *) shm_malloc(sizeof(endpoint_stream_t));
+        temporary->temporary = 1;
+
+        if (shm_copy_string(current->media, (int) strlen(current->media), &(temporary->media)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        if (shm_copy_string(port, (int) strlen(port), &(temporary->port)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        if (shm_copy_string(port, (int) strlen(port), &(temporary->rtcp_port)) == -1) {
+            ERR("cannot copy string.\n");
+            destroy_stream(temporary);
+
+            return -1;
+        }
+
+        current->next = temporary;
+        temporary->next = next;
+
+        current = next;
+        temporary = NULL;
+    }
+
+    return 0;
+}
+
+static int remove_temporary_streams(endpoint_t *endpoint) {
+    endpoint_stream_t *current = endpoint->streams;
+    endpoint_stream_t *temporary = NULL;
+    endpoint_stream_t *prev = NULL;
+
+    int ctr = -1;
+
+    if (current == NULL) {
+        ERR("endpoint has no streams.\n");
+
+        return ctr;
+    }
+
+    do {
+        // switch temporary and old streams
+        current->temporary = !current->temporary;
+
+        if (current->temporary == 1) {
+            temporary = current;
+
+            /*
+             * when we are about to remove head of streams
+             * we need to make sure that we link streams back to endpoint
+             */
+            if (endpoint->streams == current) {
+                endpoint->streams = current->next;
+            }
+
+            current = current->next;
+
+            if (prev != NULL) {
+                prev->next = current;
+            }
+
+            // free temporary stream
+            shm_free(temporary);
+            ctr++;
+        }
+
+        if (current != NULL) {
+            prev = current;
+            current = current->next;
+        }
+
+    } while (current != NULL);
+
+    return ctr;
+}
+
+int add_new_in_rule(
+        const char *ip,
+        short unsigned int port,
+        char *new_port,
+        connection_t **connection_list
+) {
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    current = *connection_list;
+
+    int ctr = -1;
+
+    while (current != NULL) {
+
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            add_temporary_streams(current->request_endpoint, new_port);
+            ctr++;
+        }
+
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            add_temporary_streams(current->response_endpoint, new_port);
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    return ctr;
+}
+
+int remove_temporary_rules(
+        const char *ip,
+        short unsigned int port,
+        connection_t **connection_list
+) {
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    current = *connection_list;
+
+    int ctr = -1;
+
+    while (current != NULL) {
+
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            remove_temporary_streams(current->request_endpoint);
+            ctr++;
+        }
+
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            remove_temporary_streams(current->response_endpoint);
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    return ctr;
+}
+
+int change_socket_for_endpoints(
+        const char *ip,
+        short unsigned int port,
+        struct socket_info *new_socket,
+        connection_t **connection_list
+) {
+    if (*connection_list == NULL) {
+        ERR("connections list is not initialized yet\n");
+        return -1;
+    }
+
+    connection_t *current;
+    current = *connection_list;
+
+    int ctr = -1;
+
+    while (current != NULL) {
+
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            current->request_endpoint->socket = new_socket;
+            ctr++;
+        }
+
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            current->response_endpoint->socket = new_socket;
+            ctr++;
+        }
+
+        current = current->next;
+    }
+
+    return ctr;
+}
+
+int find_counter_endpoint(
+        const char *ip,
+        short unsigned int port,
+        endpoint_t **endpoint,
+      connection_t **connection_list
+) {
     *endpoint = NULL;
 
     if (*connection_list == NULL) {
@@ -305,12 +526,22 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
         if (has_request_and_response_endpoints(current) == 0) {
 
             DBG("Response endpoint streams\n");
-            if (process_endpoints(current->request_endpoint, current->response_endpoint, endpoint, ip, port) == 0) {
+            if (find_sibling_endpoint_by_ip_and_port(
+                    current->request_endpoint,
+                    current->response_endpoint,
+                    endpoint,
+                    ip,
+                    port) == 0) {
                 return 0;
             }
 
             DBG("Request endpoint streams\n");
-            if (process_endpoints(current->response_endpoint, current->request_endpoint, endpoint, ip, port) == 0) {
+            if (find_sibling_endpoint_by_ip_and_port(
+                    current->response_endpoint,
+                    current->request_endpoint,
+                    endpoint,
+                    ip,
+                    port) == 0) {
                 return 0;
             }
         }
