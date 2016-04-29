@@ -1,5 +1,4 @@
 #include "ssp_connection.h"
-#include "ssp_stream.h"
 
 static int has_request_and_response_endpoints(connection_t *connection) {
     if (connection->request_endpoint == NULL) {
