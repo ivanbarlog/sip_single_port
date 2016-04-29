@@ -385,9 +385,14 @@ int msg_received(void *data) {
                 goto done;
             }
 
-#ifdef DEBUG_BUILD
-            INFO("Sending RTP/RTCP packet to %s:%d\n", dst_endpoint->ip, dst_port);
-#endif
+//#ifdef DEBUG_BUILD
+            INFO(
+                    "Sending RTP/RTCP packet to %s:%d via %.*s:%.*s socket\n",
+                    dst_endpoint->ip, dst_port,
+                    dst_endpoint->socket->address_str.len, dst_endpoint->socket->address_str.s,
+                    dst_endpoint->socket->port_no_str.len, dst_endpoint->socket->port_no_str.s
+            );
+//#endif
 
             if (send_packet_to_endpoint(obuf, *dst_ip, dst_endpoint->socket) == 0) {
                 INFO("RTP packet sent successfully!\n");
