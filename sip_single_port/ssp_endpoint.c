@@ -94,6 +94,7 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     char *result = NULL;
     char *endpoint_info = NULL;
+    char *socket_info = NULL;
     char *streams_info = NULL;
     int success;
 
@@ -108,17 +109,27 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
         return NULL;
     }
 
+    success = asprintf(
+            &socket_info,
+            "Sending socket: %.*s:%.*s",
+            endpoint->socket->address_str.len, endpoint->socket->address_str.s,
+            endpoint->socket->port_no_str.len, endpoint->socket->port_no_str.s
+    );
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return NULL;
+    }
+
     streams_info = print_endpoint_streams(endpoint->streams);
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n%s\n%s\n | %.*s:%.*s |\n",
+            "%s\n | %-39s |\n | %-39s |\n%s\n",
             get_hdr_line(),
             endpoint_info,
-            streams_info,
-            get_hdr_line(),
-            endpoint->socket->address_str.len, endpoint->socket->address_str.s,
-            endpoint->socket->port_no_str.len, endpoint->socket->port_no_str.s
+            socket_info,
+            streams_info
     );
 
     if (endpoint_info != NULL)

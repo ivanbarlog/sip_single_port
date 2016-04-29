@@ -117,10 +117,15 @@ int add_new_in_rule(
         connection_t **connection_list
 );
 
-int remove_temporary_rules(connection_t **connection_list);
+int remove_temporary_rules(
+        const char *ip,
+        short unsigned int port,
+        connection_t **connection_list
+);
 
 int change_socket_for_endpoints(
-        struct socket_info *old_socket,
+        const char *ip,
+        short unsigned int port,
         struct socket_info *new_socket,
         connection_t **connection_list
 );

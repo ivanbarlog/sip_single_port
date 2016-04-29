@@ -289,6 +289,28 @@ static int find_sibling_endpoint_by_ip_and_port(
     return -1;
 }
 
+static int match_endpoint(
+        endpoint_t *endpoint,
+        const char *ip,
+        short unsigned int port
+) {
+    if (strcmp(endpoint->ip, ip) != 0) {
+        INFO("IP not matching.\n");
+
+        return -1;
+    }
+
+    if (contain_port(endpoint->streams, &port) != 0) {
+        INFO("port not matching.\n");
+
+        return -1;
+    }
+
+    DBG("IP:port matching\n");
+
+    return 0;
+}
+
 static int add_temporary_streams(endpoint_t *endpoint, char *port) {
     endpoint_stream_t *current;
     current = endpoint->streams;
@@ -334,14 +356,17 @@ static int add_temporary_streams(endpoint_t *endpoint, char *port) {
 }
 
 static int remove_temporary_streams(endpoint_t *endpoint) {
-    endpoint_stream_t *current;
-    current = endpoint->streams;
-
+    endpoint_stream_t *current = endpoint->streams;
     endpoint_stream_t *temporary = NULL;
-    endpoint_stream_t *prev = current;
-    current = current->next;
+    endpoint_stream_t *prev = NULL;
 
     int ctr = -1;
+
+    if (current == NULL) {
+        ERR("endpoint has no streams.\n");
+
+        return ctr;
+    }
 
     do {
         // switch temporary and old streams
@@ -349,17 +374,30 @@ static int remove_temporary_streams(endpoint_t *endpoint) {
 
         if (current->temporary == 1) {
             temporary = current;
-            current = current->next;
-            prev->next = current;
 
-            if (temporary != NULL) {
-                shm_free(temporary);
-                ctr++;
+            /*
+             * when we are about to remove head of streams
+             * we need to make sure that we link streams back to endpoint
+             */
+            if (endpoint->streams == current) {
+                endpoint->streams = current->next;
             }
+
+            current = current->next;
+
+            if (prev != NULL) {
+                prev->next = current;
+            }
+
+            // free temporary stream
+            shm_free(temporary);
+            ctr++;
         }
 
-        prev = current;
-        current = current->next;
+        if (current != NULL) {
+            prev = current;
+            current = current->next;
+        }
 
     } while (current != NULL);
 
@@ -378,84 +416,64 @@ int add_new_in_rule(
     }
 
     connection_t *current;
-    endpoint_t *endpoint = NULL;
     current = *connection_list;
 
-    int ctr = 0;
+    int ctr = -1;
 
     while (current != NULL) {
 
-        if (current->request_endpoint &&
-                find_sibling_endpoint_by_ip_and_port(
-                        current->request_endpoint,
-                        current->response_endpoint,
-                        &endpoint,
-                        ip,
-                        port
-                ) == 0) {
-            add_temporary_streams(endpoint->sibling, new_port);
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            add_temporary_streams(current->request_endpoint, new_port);
             ctr++;
         }
 
-        if (current->response_endpoint &&
-                find_sibling_endpoint_by_ip_and_port(
-                        current->response_endpoint,
-                        current->request_endpoint,
-                        &endpoint,
-                        ip,
-                        port
-                ) == 0) {
-            add_temporary_streams(endpoint->sibling, new_port);
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            add_temporary_streams(current->response_endpoint, new_port);
             ctr++;
         }
 
         current = current->next;
     }
 
-    if (ctr > 0) {
-        return 0;
-    }
-
-    return -1;
+    return ctr;
 }
 
-int remove_temporary_rules(connection_t **connection_list)
-{
+int remove_temporary_rules(
+        const char *ip,
+        short unsigned int port,
+        connection_t **connection_list
+) {
     if (*connection_list == NULL) {
         ERR("connections list is not initialized yet\n");
         return -1;
     }
 
     connection_t *current;
-    endpoint_t *endpoint = NULL;
     current = *connection_list;
 
-    int ctr = 0;
+    int ctr = -1;
 
     while (current != NULL) {
 
-        if (current->request_endpoint) {
-            remove_temporary_streams(endpoint);
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            remove_temporary_streams(current->request_endpoint);
             ctr++;
         }
 
-        if (current->response_endpoint) {
-            remove_temporary_streams(endpoint);
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            remove_temporary_streams(current->response_endpoint);
             ctr++;
         }
 
         current = current->next;
     }
 
-    if (ctr > 0) {
-        return 0;
-    }
-
-    return -1;
+    return ctr;
 }
 
 int change_socket_for_endpoints(
-        struct socket_info *old_socket,
+        const char *ip,
+        short unsigned int port,
         struct socket_info *new_socket,
         connection_t **connection_list
 ) {
@@ -471,24 +489,12 @@ int change_socket_for_endpoints(
 
     while (current != NULL) {
 
-#ifdef DEBUG_BUILD
-        INFO("Call-ID: %s\n", current->call_id);
-
-        if (current->request_endpoint) {
-            INFO("request endpoint: %p == %p | %d\n", current->request_endpoint->socket, old_socket, current->request_endpoint->socket == old_socket);
-        }
-
-        if (current->response_endpoint) {
-            INFO("response endpoint: %p == %p | %d\n", current->response_endpoint->socket, old_socket, current->response_endpoint->socket == old_socket);
-        }
-#endif
-
-        if (current->request_endpoint && current->request_endpoint->socket == old_socket) {
+        if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
             current->request_endpoint->socket = new_socket;
             ctr++;
         }
 
-        if (current->response_endpoint && current->request_endpoint->socket == old_socket) {
+        if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
             current->response_endpoint->socket = new_socket;
             ctr++;
         }

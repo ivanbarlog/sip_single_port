@@ -97,13 +97,23 @@ static param_export_t params[] = {
         {0, 0, 0}
 };
 
-static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
-static int m_remove_in_rule(sip_msg_t *msg);
-static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port);
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_port);
+/**
+ * @arguments
+ * source IP:port - for this endpoint we are about to remove all old rules and replace them with temporary rules
+ */
+static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port);
+/**
+ * @arguments
+ * source IP:port - which endpoint wants the change
+ * from IP:port - which socket will be changed
+ * to IP:port - to which socket we are about to switch
+ */
+static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port);
 
 static cmd_export_t cmds[] = {
-        {"add_in_rule", (cmd_function) m_add_in_rule, 4, NULL, 0, ANY_ROUTE},
-        {"remove_in_rule", (cmd_function) m_remove_in_rule, 0, NULL, 0, ANY_ROUTE},
+        {"add_in_rule", (cmd_function) m_add_in_rule, 3, NULL, 0, ANY_ROUTE},
+        {"remove_in_rule", (cmd_function) m_remove_in_rule, 2, NULL, 0, ANY_ROUTE},
         {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
         {0, 0, 0, 0, 0, 0}
 };
@@ -438,26 +448,19 @@ int msg_sent(void *data) {
     return 0;
 }
 
-/**
- * This function is called with the pair of remote old IP:port and new IP:port
- * eg. if local IP:port is 192.168.0.32:5060 and remote is 192.168.0.31:5060 and we want switch to 5070
- * this function will be called with four arguments: (192.168.0.31, 5060, 192.168.0.31, 5070)
- */
-static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_port) {
 
-    INFO("ADD_IN_RULE(%s, %s, %s, %s)\n", f_ip, f_port, t_ip, t_port);
+    if (f_ip == 0 || f_port == 0 || t_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
 
     char *cl_table = print_connections_list(&(connections_list->head));
     DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
 
     if (cl_table != NULL)
         free(cl_table);
-
-    if (f_ip == 0 || f_port == 0 || t_ip == 0 || t_port == 0) {
-        ERR("You must provide values for all parameters.\n");
-
-        return -1;
-    }
 
     lock(connections_list);
 
@@ -469,6 +472,8 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, c
         return -1;
     }
 
+    unlock(connections_list);
+
     INFO("ADD_IN_RULE - rule ADDed\n");
 
     cl_table = print_connections_list(&(connections_list->head));
@@ -477,13 +482,16 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, c
     if (cl_table != NULL)
         free(cl_table);
 
-
-    unlock(connections_list);
-
     return 1;
 }
 
-static int m_remove_in_rule(sip_msg_t *msg) {
+static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port) {
+
+    if (s_ip == 0 || s_port == 0) {
+        ERR("You must provide values for all parameters.\n");
+
+        return -1;
+    }
 
     INFO("REMOVE_IN_RULE()\n");
 
@@ -496,12 +504,14 @@ static int m_remove_in_rule(sip_msg_t *msg) {
     lock(connections_list);
 
     // find all endpoints matching IP:port and add temporary streams
-    if (remove_temporary_rules(&(connections_list->head)) == -1) {
+    if (remove_temporary_rules(s_ip, (unsigned short) atoi(s_port), &(connections_list->head)) == -1) {
         ERR("there are no endpoints where can be removed temporary rules.\n");
         unlock(connections_list);
 
         return -1;
     }
+
+    unlock(connections_list);
 
     INFO("REMOVE_IN_RULE - rule REMOVEd\n");
 
@@ -511,14 +521,12 @@ static int m_remove_in_rule(sip_msg_t *msg) {
     if (cl_table != NULL)
         free(cl_table);
 
-    unlock(connections_list);
-
     return 1;
 }
 
-static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip, char *t_port) {
+static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port) {
 
-    INFO("CHANGE_SOCKET(%s, %s, %s, %s)\n", f_ip, f_port, t_ip, t_port);
+    INFO("source: %s:%s", s_ip, s_port);
 
     char *cl_table = print_connections_list(&(connections_list->head));
     DBG("\n\n CONNECTIONS LIST:\n\n%s\n\n", cl_table == NULL ? "not initialized yet\n" : cl_table);
@@ -526,45 +534,22 @@ static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip,
     if (cl_table != NULL)
         free(cl_table);
 
-
-    str from_ip = {0, 0};
-    str from_port = {0, 0};
     str to_ip = {0, 0};
     str to_port = {0, 0};
 
-    if (f_ip == 0 || f_port == 0 || t_ip == 0 || t_port == 0) {
+    if (s_ip == 0 || s_port == 0 || t_ip == 0 || t_port == 0) {
         ERR("You must provide values for all parameters.\n");
 
         return -1;
     }
 
-    from_ip.s = f_ip;
-    from_ip.len = (int)strlen(f_ip);
-    from_port.s = f_port;
-    from_port.len = (int)strlen(f_port);
     to_ip.s = t_ip;
-    to_ip.len = (int)strlen(t_ip);
+    to_ip.len = (int) strlen(t_ip);
     to_port.s = t_port;
-    to_port.len = (int)strlen(t_port);
-
-    lock(connections_list);
+    to_port.len = (int) strlen(t_port);
 
     struct socket_info *sockets = get_first_socket();
-
-    struct socket_info *old_socket;
     struct socket_info *new_socket;
-    old_socket = get_bind_address(from_ip, from_port, &sockets);
-
-    if (old_socket == NULL) {
-        ERR(
-                "cannot find old socket by %.*s:%.*s\n",
-                from_ip.len, from_ip.s,
-                from_port.len, from_port.s
-        );
-        unlock(connections_list);
-
-        return -1;
-    }
 
     new_socket = get_bind_address(to_ip, to_port, &sockets);
 
@@ -574,17 +559,20 @@ static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip,
                 to_ip.len, to_ip.s,
                 to_port.len, to_port.s
         );
-        unlock(connections_list);
 
         return -1;
     }
 
-    if (change_socket_for_endpoints(old_socket, new_socket, &(connections_list->head)) == -1) {
+    lock(connections_list);
+
+    if (change_socket_for_endpoints(s_ip, (unsigned short) atoi(s_port), new_socket, &(connections_list->head)) == -1) {
         ERR("zero sockets were changed.\n");
         unlock(connections_list);
 
         return -1;
     }
+
+    unlock(connections_list);
 
     INFO("CHANGE_SOCKET - socket CHANGEd\n");
 
@@ -593,8 +581,6 @@ static int m_change_socket(sip_msg_t *msg, char *f_ip, char *f_port, char *t_ip,
 
     if (cl_table != NULL)
         free(cl_table);
-
-    unlock(connections_list);
 
     return 1;
 }
