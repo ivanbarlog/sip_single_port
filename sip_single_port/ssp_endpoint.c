@@ -1,7 +1,8 @@
 #include "ssp_endpoint.h"
 
 static char *parse_creator_ip(sip_msg_t *msg) {
-    unsigned int a, b, c, d, success;
+    int  success;
+    unsigned int a, b, c, d;
     char *creator;
     str sdp = {0, 0};
 
@@ -50,6 +51,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     endpoint->sibling = NULL;
     endpoint->streams = NULL;
 
+    endpoint->socket = NULL;
 
     if (parse_sdp(msg) != 0) {
         ERR("Cannot parse SDP or body not present, destroying endpoint\n");
@@ -66,7 +68,7 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
         return NULL;
     }
 
-    shm_copy_string(creator_ip, strlen(creator_ip), &(endpoint->ip));
+    shm_copy_string(creator_ip, (int) strlen(creator_ip), &(endpoint->ip));
 
     // free memory used by creator_ip
     free(creator_ip);
@@ -92,6 +94,7 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
 
     char *result = NULL;
     char *endpoint_info = NULL;
+    char *socket_info = NULL;
     char *streams_info = NULL;
     int success;
 
@@ -106,13 +109,26 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
         return NULL;
     }
 
+    success = asprintf(
+            &socket_info,
+            "Sending socket: %.*s:%.*s",
+            endpoint->socket->address_str.len, endpoint->socket->address_str.s,
+            endpoint->socket->port_no_str.len, endpoint->socket->port_no_str.s
+    );
+
+    if (success == -1) {
+        ERR("asprintf failed to allocate memory\n");
+        return NULL;
+    }
+
     streams_info = print_endpoint_streams(endpoint->streams);
 
     success = asprintf(
             &result,
-            "%s\n | %-39s |\n%s\n",
+            "%s\n | %-39s |\n | %-39s |\n%s\n",
             get_hdr_line(),
             endpoint_info,
+            socket_info,
             streams_info
     );
 

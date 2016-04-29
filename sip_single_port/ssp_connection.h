@@ -23,11 +23,14 @@ typedef struct connection {
     struct connection *prev;
     struct connection *next;
 
-    // lock for accessing connection from other kamailio processes
-    gen_lock_t *lock;
-
 } connection_t;
 
+typedef struct connections_list {
+    connection_t *head;
+
+    // lock for accessing connection from other kamailio processes
+    gen_lock_t *lock;
+} connections_list_t;
 
 /**
  * Destroys connection by provided pointer
@@ -96,5 +99,35 @@ int find_counter_endpoint(const char *ip, short unsigned int port, endpoint_t **
  * Returns 0 on success otherwise -1
  */
 int remove_connection(char *call_id, connection_t **connection_list);
+
+/**
+ * Locks connection in SHM
+ */
+void lock(connections_list_t *list);
+
+/**
+ * Unlocks connection in SHM
+ */
+void unlock(connections_list_t *list);
+
+int add_new_in_rule(
+        const char *ip,
+        short unsigned int port,
+        char *new_port,
+        connection_t **connection_list
+);
+
+int remove_temporary_rules(
+        const char *ip,
+        short unsigned int port,
+        connection_t **connection_list
+);
+
+int change_socket_for_endpoints(
+        const char *ip,
+        short unsigned int port,
+        struct socket_info *new_socket,
+        connection_t **connection_list
+);
 
 #endif //KAMAILIO_SSP_CONNECTION_H

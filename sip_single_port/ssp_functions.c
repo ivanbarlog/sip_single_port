@@ -9,7 +9,7 @@ msg_type get_msg_type(sip_msg_t *msg) {
         }
     } else {
         //second byte from first line
-        unsigned char byte = msg->buf[1];
+        unsigned char byte = (unsigned char) msg->buf[1];
 
         //if 6th and 5th bit is "10" it's RTCP else RTP
         if (!!(byte & BIT6) == 1 && !!(byte & BIT5) == 0) {
@@ -65,7 +65,7 @@ int get_msg_body(struct sip_msg *msg, str *body) {
         return -1;
     }
 
-    body->len = msg->len - (body->s - msg->buf);
+    body->len = (int) (msg->len - (body->s - msg->buf));
 
     if (!msg->content_length) {
         return -1;

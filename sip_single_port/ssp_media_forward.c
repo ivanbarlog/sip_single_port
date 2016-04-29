@@ -1,6 +1,6 @@
 #include "ssp_media_forward.h"
 
-int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip) {
+int send_packet_to_endpoint(str *buffer, struct sockaddr_in dst_ip, struct socket_info *bind_address) {
 
     int sent_bytes = sendto(
             bind_address->socket,
@@ -98,7 +98,7 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
         return  -1;
     }
 
-    *tag_length = strlen(tag) + 1;
+    *tag_length = (int)strlen(tag) + 1;
 
     char *tmp_call_id = strtok(tag, delim);
 
@@ -109,7 +109,7 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
         return -1;
     }
 
-    if (pkg_copy_string(tmp_call_id, strlen(tmp_call_id), call_id) == -1) {
+    if (pkg_copy_string(tmp_call_id, (int) strlen(tmp_call_id), call_id) == -1) {
         ERR("Copying string failed.\n");
         free(tag);
 
@@ -125,7 +125,7 @@ int parse_tagged_msg(const char *msg, char **call_id, char **media_type, int *ta
         return -1;
     }
 
-    if (pkg_copy_string(tmp_media_type, strlen(tmp_media_type), media_type) == -1) {
+    if (pkg_copy_string(tmp_media_type, (int)strlen(tmp_media_type), media_type) == -1) {
         ERR("Copying string failed.\n");
         free(tag);
 
@@ -165,13 +165,13 @@ int tag_message(str *obuf, char *call_id, char *media_type) {
         return -1;
     }
 
-    unsigned char first_byte = obuf->s[0];
+    unsigned char first_byte = (unsigned char) obuf->s[0];
 
     // set first byte to `bin(11xxxxxx)`
-    unsigned char changed_first_byte = first_byte | 0xc0;
+    unsigned char changed_first_byte = (unsigned char) (first_byte | 0xc0);
     memcpy(modified_msg, &changed_first_byte, sizeof(unsigned char));
 
-    memcpy(&(modified_msg[1]), &tag, tag_length + 1);
+    memcpy(&(modified_msg[1]), &tag, (size_t) tag_length + 1);
 
     // copy rest of the original message after the tag
     memcpy(&(modified_msg[2 + tag_length]), obuf->s, sizeof(char) * original_length);
@@ -188,7 +188,7 @@ int remove_tag(str *obuf, int tag_length) {
     int original_msg_length = sizeof(char) * (obuf->len - tag_length - 1);
 
     // create final_msg which has length of original message minus tag_length B
-    original_msg = pkg_malloc(original_msg_length);
+    original_msg = pkg_malloc((size_t) original_msg_length);
 
     if (original_msg == NULL) {
         ERR("Cannot allocate pkg memory.\n");
@@ -196,7 +196,7 @@ int remove_tag(str *obuf, int tag_length) {
         return -1;
     }
 
-    memcpy(original_msg, &(obuf->s[1 + tag_length]), original_msg_length);
+    memcpy(original_msg, &(obuf->s[1 + tag_length]), (size_t) original_msg_length);
 
     obuf->s = original_msg;
     obuf->len = original_msg_length;

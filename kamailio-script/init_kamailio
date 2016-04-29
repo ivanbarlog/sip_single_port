@@ -1,0 +1,7 @@
+#!/bin/bash
+
+service ntp restart
+
+./remount_kamailio_folders
+mkdir -p /var/run/kamailio && chown kamailio:kamailio /var/run/kamailio
+touch /var/run/kamailio/kamailio_fifo && chown kamailio:kamailio /var/run/kamailio/kamailio_fifo

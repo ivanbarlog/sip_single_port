@@ -24,6 +24,9 @@
  * RTP and RTCP ports for each media stream type
  */
 typedef struct endpoint_stream {
+    /** tells us if the stream is temporary **/
+    int temporary;
+
     char *media;
     char *port;
     char *rtcp_port;
@@ -31,6 +34,8 @@ typedef struct endpoint_stream {
     struct endpoint_stream *next;
 
 } endpoint_stream_t;
+
+void destroy_stream(endpoint_stream_t *stream);
 
 /**
  * Frees memory allocated by endpoint streams

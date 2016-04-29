@@ -25,6 +25,9 @@ typedef struct endpoint {
     char *ip;
     char *call_id;
 
+    /* socket for sending packets */
+    struct socket_info *socket;
+
     /* list of all media streams */
     struct endpoint_stream *streams;
 
