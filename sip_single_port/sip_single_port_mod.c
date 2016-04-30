@@ -91,9 +91,13 @@ typedef enum proxy_mode {
 } proxy_mode;
 
 static int mode = SINGLE_PROXY_MODE;
+static char *rtcp_analyser_cmd = NULL;
+static char *packet_loss_threshold = NULL;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
+        {"rtcp_analyser_cmd", STR_PARAM, &rtcp_analyser_cmd},
+        {"packet_loss_threshold", STR_PARAM, &packet_loss_threshold},
         {0, 0, 0}
 };
 
@@ -113,10 +117,16 @@ static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port);
  */
 static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port);
 
+int *packet_loss = NULL;
+static int m_start_simulate_packet_loss(sip_msg_t *msg);
+static int m_stop_simulate_packet_loss(sip_msg_t *msg);
+
 static cmd_export_t cmds[] = {
         {"add_in_rule", (cmd_function) m_add_in_rule, 3, NULL, 0, ANY_ROUTE},
         {"remove_in_rule", (cmd_function) m_remove_in_rule, 2, NULL, 0, ANY_ROUTE},
         {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
+        {"start_simulate_packet_loss", (cmd_function) m_start_simulate_packet_loss, 0, NULL, 0, ANY_ROUTE},
+        {"stop_simulate_packet_loss", (cmd_function) m_stop_simulate_packet_loss, 0, NULL, 0, ANY_ROUTE},
         {0, 0, 0, 0, 0, 0}
 };
 
@@ -143,6 +153,9 @@ static int mod_init(void) {
 
     sr_event_register_cb(SREV_NET_DGRAM_IN, msg_received);
     sr_event_register_cb(SREV_NET_DATA_OUT, msg_sent);
+
+    packet_loss = (int *) shm_malloc(sizeof(int));
+    *packet_loss = 0;
 
     // initialize connection list
     connections_list = (connections_list_t *) shm_malloc(sizeof(connections_list_t));
@@ -348,6 +361,13 @@ int msg_received(void *data) {
                 // the RTP/RTCP packet is already modified
                 if ((first_byte & BIT7) != 0 && (first_byte & BIT6) != 0) {
                     INFO("DUAL_PROXY_MODE changed RTP\n");
+
+                    if (msg_type == SSP_RTP_PACKET && *packet_loss == 1) {
+                        // simulate packet loss so we won't send RTP packets to UA
+                        INFO("dropping RTP packet because of packet loss simulation.\n");
+
+                        goto done;
+                    }
 
                     if (parse_tagged_msg(&(obuf->s[1]), &pkg_call_id, &pkg_media_type, &tag_length) == -1) {
                         ERR("Cannot parse tagged message.\n");
@@ -603,6 +623,18 @@ static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip,
     if (cl_table != NULL)
         free(cl_table);
 #endif
+
+    return 1;
+}
+
+static int m_start_simulate_packet_loss(sip_msg_t *msg) {
+    *packet_loss = 1;
+
+    return 1;
+}
+
+static int m_stop_simulate_packet_loss(sip_msg_t *msg) {
+    *packet_loss = 0;
 
     return 1;
 }
