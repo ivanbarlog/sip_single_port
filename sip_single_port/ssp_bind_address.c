@@ -33,23 +33,3 @@ struct socket_info *get_bind_address(str address_str, str port_no_str, struct so
 
     return NULL;
 }
-
-int add_receiving_bind_address(endpoint_t *endpoint, struct socket_info *bind_address)
-{
-    return 0;
-}
-
-int add_sending_bind_address(endpoint_t *endpoint, struct socket_info *bind_address)
-{
-    return 0;
-}
-
-int swap_receiving_bind_address(endpoint_t *endpoint)
-{
-    return 0;
-}
-
-int swap_sending_bind_address(endpoint_t *endpoint)
-{
-    return 0;
-}
