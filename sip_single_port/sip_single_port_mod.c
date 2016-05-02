@@ -91,12 +91,10 @@ typedef enum proxy_mode {
 } proxy_mode;
 
 static int mode = SINGLE_PROXY_MODE;
-static char *rtcp_analyser_cmd = NULL;
 static char *packet_loss_threshold = NULL;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
-        {"rtcp_analyser_cmd", STR_PARAM, &rtcp_analyser_cmd},
         {"packet_loss_threshold", STR_PARAM, &packet_loss_threshold},
         {0, 0, 0}
 };
