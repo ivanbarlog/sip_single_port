@@ -64,6 +64,7 @@
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
 #include "ssp_bind_address.h"
+#include "ssp_rtcp.h"
 
 MODULE_VERSION
 
@@ -90,12 +91,19 @@ typedef enum proxy_mode {
     DUAL_PROXY_MODE,
 } proxy_mode;
 
+typedef enum instance_mode {
+    CLIENT_INSTANCE,
+    SERVER_INSTANCE,
+} instance_mode;
+
 static int mode = SINGLE_PROXY_MODE;
-static char *packet_loss_threshold = NULL;
+static int instance = CLIENT_INSTANCE;
+static int packet_loss_threshold = 0;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
-        {"packet_loss_threshold", STR_PARAM, &packet_loss_threshold},
+        {"instance", INT_PARAM, &instance},
+        {"packet_loss_threshold", INT_PARAM, &packet_loss_threshold},
         {0, 0, 0}
 };
 
@@ -388,7 +396,22 @@ int msg_received(void *data) {
                         goto done;
                     }
 
+                    unsigned char second_byte = (unsigned char) obuf->s[1];
+                    int is_rtcp = (!!(second_byte & BIT6) == 1 && !!(second_byte & BIT5) == 0) ? 1 : 0;
+
+                    // checking RTCP packet after tag was removed
+                    if (instance == SERVER_INSTANCE && is_rtcp == 1 && exceeds_limit(obuf->s, packet_loss_threshold) == 1) {
+                        // RTCP packet received from UA so we are sending notification to destination eg. kamailio client
+                        notify(dst_endpoint->ip, dst_port, get_first_socket(), &(connections_list->head));
+                    }
+
                 } else { // RTP/RTCP packet is not modified yet so we are about to tag it
+
+                    // checking RTCP packet before tagging it
+                    if (instance == SERVER_INSTANCE && msg_type == SSP_RTCP_PACKET && exceeds_limit(obuf->s, packet_loss_threshold) == 1) {
+                        // RTCP packet received from kamailio client so we are sending notification back to source
+                        notify(src_ip, src_port, get_first_socket(), &(connections_list->head));
+                    }
 
                     if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
                         ERR("Cannot find destination port where the packet should be forwarded.\n");
