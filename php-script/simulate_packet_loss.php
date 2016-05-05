@@ -7,4 +7,3 @@ if (PHP_SAPI !== 'cli') {
 $path = sprintf("%s%s..%s%s", dirname(__FILE__), DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, "packet_loss");
 
 echo (int)file_exists($path);
-

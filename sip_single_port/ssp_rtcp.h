@@ -5,6 +5,7 @@
 
 #include "../../ip_addr.h"
 #include "ssp_connection.h"
+#include "ssp_bind_address.h"
 
 /**
  * Parses `fraction lost` from RTCP packet and compares it to threshold
@@ -18,6 +19,6 @@ int exceeds_limit(char *rtcp, int threshold);
  * connections_list and finding count of connections with sending socket; after
  * that the socket_list is traversed and we are searching the least occupied socket
  */
-int notify(char *ip, unsigned short port, struct socket_info *socket_list, connection_t **connection_list);
+int notify(char *ip, unsigned short port, socket_list_t *socket_list, struct socket_info *current_socket);
 
 #endif //KAMAILIO_SSP_RTCP_H
