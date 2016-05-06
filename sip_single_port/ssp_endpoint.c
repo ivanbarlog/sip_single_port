@@ -33,6 +33,9 @@ void destroy_endpoint(endpoint_t *endpoint) {
     if (endpoint->streams != NULL)
         destroy_endpoint_streams(&(endpoint->streams));
 
+    if (endpoint->lock != NULL)
+        lock_destroy(endpoint->lock);
+
     // we don't need to free call_id and sibling
     // since they are just pointers and will be freed after whole endpoint is
 
@@ -52,6 +55,20 @@ endpoint_t *parse_endpoint(sip_msg_t *msg) {
     endpoint->streams = NULL;
 
     endpoint->socket = NULL;
+
+    endpoint->lock = lock_alloc();
+
+    if (endpoint->lock == NULL) {
+        ERR("cannot allocate the lock for endpoint\n");
+        destroy_endpoint(endpoint);
+        return NULL;
+    }
+
+    if (lock_init(endpoint->lock) == NULL) {
+        ERR("lock initialization failed\n");
+        destroy_endpoint(endpoint);
+        return NULL;
+    }
 
     if (parse_sdp(msg) != 0) {
         ERR("Cannot parse SDP or body not present, destroying endpoint\n");
@@ -144,4 +161,12 @@ char *print_endpoint(endpoint_t *endpoint, const char *label) {
     }
 
     return result;
+}
+
+void lock_endpoint(endpoint_t *endpoint) {
+    lock_get(endpoint->lock);
+}
+
+void unlock_endpoint(endpoint_t *endpoint) {
+    lock_release(endpoint->lock);
 }

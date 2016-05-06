@@ -46,5 +46,4 @@ int print_socket_list(socket_list_t *list);
  */
 struct socket_info *get_bind_address(str address_str, str port_no_str, struct socket_info **list);
 
-
 #endif //KAMAILIO_SSP_BIND_ADDRESS_H

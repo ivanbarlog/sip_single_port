@@ -26,6 +26,10 @@ void destroy_connection(connection_t *connection) {
         destroy_endpoint(connection->response_endpoint);
     }
 
+    if (connection->lock != NULL) {
+        lock_destroy(connection->lock);
+    }
+
     // we don't need to free next, prev, request and response endpoint IP
     // since they are just pointers and will be freed after whole connection is
 
@@ -50,6 +54,20 @@ connection_t *create_connection(char *call_id) {
 
     connection->request_endpoint_ip = NULL;
     connection->response_endpoint_ip = NULL;
+
+    connection->lock = lock_alloc();
+
+    if (connection->lock == NULL) {
+        ERR("cannot allocate the lock for connection\n");
+        destroy_connection(connection);
+        return NULL;
+    }
+
+    if (lock_init(connection->lock) == NULL) {
+        ERR("lock initialization failed\n");
+        destroy_connection(connection);
+        return NULL;
+    }
 
     shm_copy_string(call_id, (int) strlen(call_id), &(connection->call_id));
 
@@ -86,8 +104,13 @@ int push_connection(connection_t *connection, connection_t **connection_list) {
      * Set link between last connection
      * and the one we are trying to push
      */
+    lock_connection(tmp);
     tmp->prev = current;
+    unlock_connection(tmp);
+
+    lock_connection(current);
     current->next = tmp;
+    unlock_connection(current);
 
     return ctr;
 }
@@ -321,6 +344,31 @@ static int add_temporary_streams(endpoint_t *endpoint, char *port) {
         next = current->next;
 
         temporary = (endpoint_stream_t *) shm_malloc(sizeof(endpoint_stream_t));
+
+        if (temporary == NULL) {
+            ERR("cannot allocate shm memory\n");
+            return -1;
+        }
+
+        temporary->media = NULL;
+        temporary->port = NULL;
+        temporary->rtcp_port = NULL;
+        temporary->next = NULL;
+
+        temporary->lock = lock_alloc();
+
+        if (temporary->lock == NULL) {
+            ERR("cannot allocate the lock for stream\n");
+            destroy_stream(temporary);
+            return -1;
+        }
+
+        if (lock_init(temporary->lock) == NULL) {
+            ERR("lock initialization failed\n");
+            destroy_stream(temporary);
+            return -1;
+        }
+
         temporary->temporary = 1;
 
         if (shm_copy_string(current->media, (int) strlen(current->media), &(temporary->media)) == -1) {
@@ -344,8 +392,13 @@ static int add_temporary_streams(endpoint_t *endpoint, char *port) {
             return -1;
         }
 
+        lock_stream(current);
         current->next = temporary;
+        unlock_stream(current);
+
+        lock_stream(temporary);
         temporary->next = next;
+        unlock_stream(temporary);
 
         current = next;
         temporary = NULL;
@@ -379,17 +432,23 @@ static int remove_temporary_streams(endpoint_t *endpoint) {
              * we need to make sure that we link streams back to endpoint
              */
             if (endpoint->streams == current) {
+                lock_endpoint(endpoint);
                 endpoint->streams = current->next;
+                unlock_endpoint(endpoint);
             }
 
+            lock_stream(current);
             current = current->next;
+            unlock_stream(current);
 
             if (prev != NULL) {
+                lock_stream(prev);
                 prev->next = current;
+                unlock_stream(prev);
             }
 
             // free temporary stream
-            shm_free(temporary);
+            destroy_stream(temporary);
             ctr++;
         }
 
@@ -489,12 +548,18 @@ int change_socket_for_endpoints(
     while (current != NULL) {
 
         if (current->request_endpoint && match_endpoint(current->request_endpoint, ip, port) == 0) {
+            lock_endpoint(current->request_endpoint);
             current->request_endpoint->socket = new_socket;
+            unlock_endpoint(current->request_endpoint);
+
             ctr++;
         }
 
         if (current->response_endpoint && match_endpoint(current->response_endpoint, ip, port) == 0) {
+            lock_endpoint(current->response_endpoint);
             current->response_endpoint->socket = new_socket;
+            unlock_endpoint(current->response_endpoint);
+
             ctr++;
         }
 
@@ -566,12 +631,21 @@ int remove_connection(char *call_id, connection_t **connection_list) {
             *connection_list = NULL;
         } else if (prev == NULL) {
             *connection_list = next;
+            lock_connection(next);
             next->prev = NULL;
+            unlock_connection(next);
         } else if (next == NULL) {
+            lock_connection(prev);
             prev->next = NULL;
+            unlock_connection(prev);
         } else {
+            lock_connection(prev);
             prev->next = next;
+            unlock_connection(prev);
+
+            lock_connection(next);
             next->prev = prev;
+            unlock_connection(next);
         }
 
         destroy_connection(connection);
@@ -583,10 +657,10 @@ int remove_connection(char *call_id, connection_t **connection_list) {
     return -1;
 }
 
-void lock(connections_list_t *list) {
-    lock_get(list->lock);
+void lock_connection(connection_t *connection) {
+    lock_get(connection->lock);
 }
 
-void unlock(connections_list_t *list) {
-    lock_release(list->lock);
+void unlock_connection(connection_t *connection) {
+    lock_release(connection->lock);
 }

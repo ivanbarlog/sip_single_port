@@ -11,6 +11,9 @@ void destroy_stream(endpoint_stream_t *stream)
     if (stream->rtcp_port != NULL)
         shm_free(stream->rtcp_port);
 
+    if (stream->lock != NULL)
+        lock_destroy(stream->lock);
+
     shm_free(stream);
 }
 
@@ -42,7 +45,7 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
             endpoint_stream_t *tmp = (endpoint_stream_t *) shm_malloc(sizeof(endpoint_stream_t));
 
             if (tmp == NULL) {
-                ERR("cannot allocate pkg memory\n");
+                ERR("cannot allocate shm memory\n");
                 return -1;
             }
 
@@ -50,6 +53,20 @@ int parse_streams(sip_msg_t *msg, endpoint_stream_t **streams) {
             tmp->port = NULL;
             tmp->rtcp_port = NULL;
             tmp->next = NULL;
+
+            tmp->lock = lock_alloc();
+
+            if (tmp->lock == NULL) {
+                ERR("cannot allocate the lock for stream\n");
+                destroy_stream(tmp);
+                return -1;
+            }
+
+            if (lock_init(tmp->lock) == NULL) {
+                ERR("lock initialization failed\n");
+                destroy_stream(tmp);
+                return -1;
+            }
 
             tmp->temporary = 0;
 
@@ -306,4 +323,12 @@ int contain_port(endpoint_stream_t *streams, unsigned short *port) {
 
     INFO("Cannot find port '%hu' in endpoint streams.\n", *port);
     return -1;
+}
+
+void lock_stream(endpoint_stream_t *stream) {
+    lock_get(stream->lock);
+}
+
+void unlock_stream(endpoint_stream_t *stream) {
+    lock_release(stream->lock);
 }
