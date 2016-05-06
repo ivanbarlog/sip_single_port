@@ -1,9 +1,9 @@
 notify.php
 ##########
 
-kamailio calls `notify.php` from within the kamailio.cfg periodically every 10 seconds and based on the output kamailio decides if the REGISTER message which purpose is to initiate process of switching ports will be sent to server kamailio instance.
+kamailio calls `notify.php` from within the kamailio.cfg periodically every X seconds and based on the output kamailio decides if the REGISTER message which purpose is to initiate process of switching ports will be sent to server kamailio instance.
 
-`notify.php` will output `true` when file `../notify` exists eg. you can trigger it by simply creating the file `touch ../notify`
+`notify.php` will output `1` when file `../notify` exists eg. you can trigger it by simply creating the file `touch ../notify`
 When you want to stop triggering notification you simply remove the file eg. `rm ../notify`
 
 kamailio will try to parse IP:port for re-registration in /usr/local/src/location - this file needs to be created on each kamailio server separately and it will contain IP on first line and port on second line

@@ -64,6 +64,9 @@
 #include "ssp_stream.h"
 #include "ssp_media_forward.h"
 #include "ssp_bind_address.h"
+#include "ssp_rtcp.h"
+#include "ssp_bind_address.h"
+
 
 MODULE_VERSION
 
@@ -73,6 +76,10 @@ MODULE_VERSION
 connections_list_t *connections_list = NULL;
 
 #define _connections_list (connections_list)
+
+socket_list_t *socket_list = NULL;
+
+#define _socket_list (socket_list)
 
 /** module functions */
 static int mod_init(void);
@@ -90,10 +97,19 @@ typedef enum proxy_mode {
     DUAL_PROXY_MODE,
 } proxy_mode;
 
+typedef enum instance_mode {
+    CLIENT_INSTANCE,
+    SERVER_INSTANCE,
+} instance_mode;
+
 static int mode = SINGLE_PROXY_MODE;
+static int instance = CLIENT_INSTANCE;
+static int packet_loss_threshold = 0;
 
 static param_export_t params[] = {
         {"mode", INT_PARAM, &mode},
+        {"instance", INT_PARAM, &instance},
+        {"packet_loss_threshold", INT_PARAM, &packet_loss_threshold},
         {0, 0, 0}
 };
 
@@ -113,10 +129,13 @@ static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port);
  */
 static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip, char *t_port);
 
+static int m_subscribe_client(sip_msg_t *msg, char *ip, char *port);
+
 static cmd_export_t cmds[] = {
         {"add_in_rule", (cmd_function) m_add_in_rule, 3, NULL, 0, ANY_ROUTE},
         {"remove_in_rule", (cmd_function) m_remove_in_rule, 2, NULL, 0, ANY_ROUTE},
         {"change_socket", (cmd_function) m_change_socket, 4, NULL, 0, ANY_ROUTE},
+        {"subscribe_client", (cmd_function) m_subscribe_client, 2, NULL, 0, ANY_ROUTE},
         {0, 0, 0, 0, 0, 0}
 };
 
@@ -165,6 +184,28 @@ static int mod_init(void) {
         return -1;
     }
 
+    socket_list = (socket_list_t *) shm_malloc(sizeof(socket_list_t));
+    if (socket_list == NULL) {
+        ERR("cannot allocate socket list\n");
+        shm_free(connections_list);
+        return -1;
+    }
+
+    socket_list->lock = lock_alloc();
+    if (socket_list->lock == NULL) {
+        ERR("cannot allocate the lock for the socket list\n");
+        shm_free(connections_list);
+        shm_free(socket_list);
+        return -1;
+    }
+
+    if (lock_init(socket_list->lock) == NULL) {
+        ERR("lock initialization failed\n");
+        shm_free(connections_list);
+        shm_free(socket_list);
+        return -1;
+    }
+
 #ifdef USE_TCP
     tcp_set_clone_rcvbuf(1);
 #endif
@@ -182,6 +223,13 @@ static int child_init(int rank) {
     }
 
     connections_list = _connections_list;
+
+    if (_socket_list == NULL) {
+        ERR("socket list not initialized in main process\n");
+        return -1;
+    }
+
+    socket_list = _socket_list;
 
     return 0;
 }
@@ -370,7 +418,22 @@ int msg_received(void *data) {
                         goto done;
                     }
 
+                    unsigned char second_byte = (unsigned char) obuf->s[1];
+                    int is_rtcp = (!!(second_byte & BIT6) == 1 && !!(second_byte & BIT5) == 0) ? 1 : 0;
+
+                    // checking RTCP packet after tag was removed
+                    if (instance == SERVER_INSTANCE && is_rtcp == 1 && exceeds_limit(obuf->s, packet_loss_threshold) == 1) {
+                        // RTCP packet received from UA so we are sending notification to destination eg. kamailio client
+                        notify(src_ip, src_port, _socket_list, ri->bind_address);
+                    }
+
                 } else { // RTP/RTCP packet is not modified yet so we are about to tag it
+
+                    // checking RTCP packet before tagging it
+                    if (instance == SERVER_INSTANCE && msg_type == SSP_RTCP_PACKET && exceeds_limit(obuf->s, packet_loss_threshold) == 1) {
+                        // RTCP packet received from kamailio client so we are sending notification back to source
+                        notify(dst_endpoint->ip, dst_port, _socket_list, ri->bind_address);
+                    }
 
                     if (find_dst_port(msg_type, src_endpoint, dst_endpoint, src_port, &dst_port, &media_type) == -1) {
                         ERR("Cannot find destination port where the packet should be forwarded.\n");
@@ -595,6 +658,10 @@ static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip,
 
     unlock(connections_list);
 
+    decrement_clients_count(msg->rcv.bind_address, _socket_list);
+    increment_clients_count(new_socket, _socket_list);
+
+
 #ifdef DEBUG_BUILD
     INFO("CHANGE_SOCKET - socket CHANGEd\n");
     cl_table = print_connections_list(&(connections_list->head));
@@ -603,6 +670,50 @@ static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip,
     if (cl_table != NULL)
         free(cl_table);
 #endif
+
+    return 1;
+}
+
+static int m_subscribe_client(sip_msg_t *msg, char *ip, char *port) {
+
+    if (socket_list->head == NULL) {
+        socket_list->head = init_socket_list(get_first_socket());
+
+        if (socket_list->head == NULL) {
+            ERR("cannot initialize socket list head.\n");
+            shm_free(connections_list);
+            shm_free(socket_list);
+            return -1;
+        }
+    }
+
+    str address = {0,0};
+    str port_no = {0,0};
+    address.s = ip;
+    address.len = (int)strlen(ip);
+    port_no.s = port;
+    port_no.len = (int)strlen(port);
+
+    struct socket_info *sockets = get_first_socket();
+    struct socket_info *socket = get_bind_address(
+            msg->rcv.bind_address->address_str,
+            msg->rcv.bind_address->port_no_str,
+            &sockets
+    );
+
+    INFO(
+            "subscribe client: %.*s:%.*s (received on socket %.*s:%.*s)\n",
+            address.len, address.s,
+            port_no.len, port_no.s,
+            msg->rcv.bind_address->address_str.len, msg->rcv.bind_address->address_str.s,
+            msg->rcv.bind_address->port_no_str.len, msg->rcv.bind_address->port_no_str.s
+    );
+
+    print_socket_list(_socket_list);
+
+    increment_clients_count(socket, _socket_list);
+
+    print_socket_list(_socket_list);
 
     return 1;
 }

@@ -30,8 +30,4 @@ int terminates_dialog(sip_msg_t *msg);
  */
 int cancels_dialog(sip_msg_t *msg);
 
-int is_register_request(sip_msg_t *msg);
-
-int is_register_response(sip_msg_t *msg);
-
 #endif //KAMAILIO_SSP_PARSE_H

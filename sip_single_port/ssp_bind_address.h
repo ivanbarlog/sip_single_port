@@ -8,9 +8,37 @@
 #include "../../parser/msg_parser.h"
 #include "../../parser/hf.h"
 #include "../../parser/parse_content.h"
+#include "../../locking.h"
+
 #include "ssp_endpoint.h"
 
+typedef struct socket_item {
+    int count;
+    struct socket_info *socket;
+
+    struct socket_item *next;
+} socket_item_t;
+
+typedef struct socket_list {
+    socket_item_t *head;
+    gen_lock_t *lock;
+} socket_list_t;
+
+socket_item_t *init_socket_list(struct socket_info *socket_list);
+
+socket_item_t *find_least_used_socket(socket_list_t *socket_list);
+
+int increment_clients_count(struct socket_info *socket, socket_list_t *socket_list);
+
+int decrement_clients_count(struct socket_info *socket, socket_list_t *socket_list);
+
+void lock_socket_list(socket_list_t *list);
+
+void unlock_socket_list(socket_list_t *list);
+
 void print_socket_addresses(struct socket_info *socket);
+
+int print_socket_list(socket_list_t *list);
 
 /**
  * Finds binding socket within kamailio's listening sockets
@@ -18,28 +46,5 @@ void print_socket_addresses(struct socket_info *socket);
  */
 struct socket_info *get_bind_address(str address_str, str port_no_str, struct socket_info **list);
 
-/**
- * Adds binding address to endpoint
- * as temporary receiving address
- */
-int add_receiving_bind_address(endpoint_t *endpoint, struct socket_info *bind_address);
-
-/**
- * Adds binding address to endpoint
- * as temporary sending address
- */
-int add_sending_bind_address(endpoint_t *endpoint, struct socket_info *bind_address);
-
-/**
- * Removes current receiving binding address and replaces
- * it with temporary one
- */
-int swap_receiving_bind_address(endpoint_t *endpoint);
-
-/**
- * Removes current sending binding address and replaces
- * it with temporary one
- */
-int swap_sending_bind_address(endpoint_t *endpoint);
 
 #endif //KAMAILIO_SSP_BIND_ADDRESS_H
