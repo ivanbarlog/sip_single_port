@@ -11,6 +11,7 @@
 #include "../../parser/parse_content.h"
 #include "../../parser/sdp/sdp.h"
 #include "../../mem/mem.h"
+#include "../../locking.h"
 
 #include "ssp_stream.h"
 #include "ssp_functions.h"
@@ -33,6 +34,8 @@ typedef struct endpoint {
 
     struct endpoint *sibling;
 
+    gen_lock_t *lock;
+
 } endpoint_t;
 
 /**
@@ -52,5 +55,8 @@ endpoint_t *parse_endpoint(sip_msg_t *msg);
  * which can be used with LM_* macros
  */
 char *print_endpoint(endpoint_t *endpoint, const char *label);
+
+void lock_endpoint(endpoint_t *endpoint);
+void unlock_endpoint(endpoint_t *endpoint);
 
 #endif //KAMAILIO_SSP_ENDPOINT_H

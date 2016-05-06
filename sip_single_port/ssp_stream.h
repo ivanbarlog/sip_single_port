@@ -10,6 +10,7 @@
 
 #include "../../str.h"
 #include "../../parser/sdp/sdp.h"
+#include "../../locking.h"
 
 #include "ssp_endpoint.h"
 #include "ssp_functions.h"
@@ -32,6 +33,8 @@ typedef struct endpoint_stream {
     char *rtcp_port;
 
     struct endpoint_stream *next;
+
+    gen_lock_t *lock;
 
 } endpoint_stream_t;
 
@@ -84,5 +87,8 @@ int get_stream_rtcp_port(endpoint_stream_t *streams, char *type, unsigned short 
  * Checks if the port is present in endpoint streams
  */
 int contain_port(endpoint_stream_t *streams, unsigned short *port);
+
+void lock_stream(endpoint_stream_t *stream);
+void unlock_stream(endpoint_stream_t *stream);
 
 #endif //KAMAILIO_SSP_STREAM_H

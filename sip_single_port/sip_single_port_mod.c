@@ -170,39 +170,21 @@ static int mod_init(void) {
         ERR("cannot allocate connections list\n");
         return -1;
     }
-    connections_list->lock = lock_alloc();
-
-    if (connections_list->lock == NULL) {
-        ERR("cannot allocate the lock for connection list\n");
-        shm_free(connections_list);
-        return -1;
-    }
-
-    if (lock_init(connections_list->lock) == NULL) {
-        ERR("lock initialization failed\n");
-        shm_free(connections_list);
-        return -1;
-    }
 
     socket_list = (socket_list_t *) shm_malloc(sizeof(socket_list_t));
     if (socket_list == NULL) {
         ERR("cannot allocate socket list\n");
-        shm_free(connections_list);
         return -1;
     }
 
     socket_list->lock = lock_alloc();
     if (socket_list->lock == NULL) {
         ERR("cannot allocate the lock for the socket list\n");
-        shm_free(connections_list);
-        shm_free(socket_list);
         return -1;
     }
 
     if (lock_init(socket_list->lock) == NULL) {
         ERR("lock initialization failed\n");
-        shm_free(connections_list);
-        shm_free(socket_list);
         return -1;
     }
 
@@ -236,8 +218,25 @@ static int child_init(int rank) {
 
 static void mod_destroy(void) {
     if (connections_list) {
-        lock_destroy(connections_list->lock);
+        connection_t *current_connection = connections_list->head;
+        while (current_connection != NULL) {
+            destroy_connection(current_connection);
+
+            current_connection = current_connection->next;
+        }
+
         shm_free(connections_list);
+    }
+
+    if (socket_list) {
+        socket_item_t *current_item = socket_list->head;
+        while (current_item != NULL) {
+            shm_free(current_item);
+
+            current_item = current_item->next;
+        }
+
+        shm_free(socket_list);
     }
 }
 
@@ -279,8 +278,6 @@ int msg_received(void *data) {
     print_socket_addresses(get_first_socket());
 #endif
 
-    lock(connections_list);
-
     switch (msg_type) {
         case SSP_SIP_REQUEST: //no break
         case SSP_SIP_RESPONSE:
@@ -317,23 +314,34 @@ int msg_received(void *data) {
                 if (connection->request_endpoint == NULL && msg_type == SSP_SIP_REQUEST) {
 
                     // add endpoint to connection
+                    lock_connection(connection);
                     connection->request_endpoint = endpoint;
                     connection->request_endpoint_ip = &(endpoint->ip);
+                    unlock_connection(connection);
+
+                    // add Call-ID to endpoint for quicker searching
+                    // set sending socket to default kamailio socket
+                    lock_endpoint(endpoint);
                     endpoint->call_id = connection->call_id;
+                    endpoint->socket = get_first_socket();
+                    unlock_endpoint(endpoint);
                 }
 
                 if (connection->response_endpoint == NULL && msg_type == SSP_SIP_RESPONSE) {
 
                     // add endpoint to connection
+                    lock_connection(connection);
                     connection->response_endpoint = endpoint;
                     connection->response_endpoint_ip = &(endpoint->ip);
+                    unlock_connection(connection);
+
+                    // add Call-ID to endpoint for quicker searching
+                    // set sending socket to default kamailio socket
+                    lock_endpoint(endpoint);
+                    endpoint->call_id = connection->call_id;
+                    endpoint->socket = get_first_socket();
+                    unlock_endpoint(endpoint);
                 }
-
-                // add Call-ID to endpoint for quicker searching
-                endpoint->call_id = connection->call_id;
-
-                // set sending socket to default kamailio socket
-                endpoint->socket = get_first_socket();
             }
 
             if (cancels_dialog(&msg) == 0) {
@@ -477,7 +485,6 @@ int msg_received(void *data) {
 
     done:
 
-    unlock(connections_list);
     free_sip_msg(&msg);
 
     if (shm_call_id != NULL)
@@ -512,6 +519,7 @@ int msg_sent(void *data) {
         goto done;
     }
 
+    // @todo find right socket by destination address msg.rcv->bind_address is empty
     if (change_media_ports(&msg, get_first_socket()) == -1) {
         ERR("Changing SDP failed.\n");
         goto done;
@@ -542,17 +550,12 @@ static int m_add_in_rule(sip_msg_t *msg, char *f_ip, char *f_port, char *t_port)
         free(cl_table);
 #endif
 
-    lock(connections_list);
-
     // find all endpoints matching IP:port and add temporary streams
     if (add_new_in_rule(f_ip, (unsigned short) atoi(f_port), t_port, &(connections_list->head)) == -1) {
         ERR("there are no endpoints where can be added the new rule.\n");
-        unlock(connections_list);
 
         return -1;
     }
-
-    unlock(connections_list);
 
 #ifdef DEBUG_BUILD
     INFO("ADD_IN_RULE - rule ADDed\n");
@@ -584,17 +587,12 @@ static int m_remove_in_rule(sip_msg_t *msg, char *s_ip, char *s_port) {
         free(cl_table);
 #endif
 
-    lock(connections_list);
-
     // find all endpoints matching IP:port and add temporary streams
     if (remove_temporary_rules(s_ip, (unsigned short) atoi(s_port), &(connections_list->head)) == -1) {
         ERR("there are no endpoints where can be removed temporary rules.\n");
-        unlock(connections_list);
 
         return -1;
     }
-
-    unlock(connections_list);
 
 #ifdef DEBUG_BUILD
     INFO("REMOVE_IN_RULE - rule REMOVEd\n");
@@ -647,16 +645,11 @@ static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip,
         return -1;
     }
 
-    lock(connections_list);
-
     if (change_socket_for_endpoints(s_ip, (unsigned short) atoi(s_port), new_socket, &(connections_list->head)) == -1) {
         ERR("zero sockets were changed.\n");
-        unlock(connections_list);
 
         return -1;
     }
-
-    unlock(connections_list);
 
     decrement_clients_count(msg->rcv.bind_address, _socket_list);
     increment_clients_count(new_socket, _socket_list);
@@ -677,7 +670,10 @@ static int m_change_socket(sip_msg_t *msg, char *s_ip, char *s_port, char *t_ip,
 static int m_subscribe_client(sip_msg_t *msg, char *ip, char *port) {
 
     if (socket_list->head == NULL) {
-        socket_list->head = init_socket_list(get_first_socket());
+        socket_item_t *head = init_socket_list(get_first_socket());
+        lock_socket_list(socket_list);
+        socket_list->head = head;
+        unlock_socket_list(socket_list);
 
         if (socket_list->head == NULL) {
             ERR("cannot initialize socket list head.\n");
