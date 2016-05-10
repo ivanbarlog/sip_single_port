@@ -1,0 +1,16 @@
+Valgrind usage:
+disable debug mode in kamailio; disable forking
+
+run kamailio through valgrind:
+
+```bash
+valgrind --leak-check=yes kamailio
+valgrind --leak-check=full --show-leak-kinds=all kamailio
+```
+
+
+From Valgrind's [Quick Start Guide](http://valgrind.org/docs/manual/quick-start.html)
+
+Your program will run much slower (eg. 20 to 30 times) than normal, and use a lot more memory. Memcheck will issue messages about memory errors and leaks that it detects.
+
+

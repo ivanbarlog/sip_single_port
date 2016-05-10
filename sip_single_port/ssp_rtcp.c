@@ -69,17 +69,5 @@ int notify(char *ip, unsigned short port, socket_list_t *socket_list, struct soc
 
     system(command);
 
-    /**
-     * 1. find least used socket
-     * 2. send notification -> create notify with contents from socket ip:port to socket ip:port
-     *
-     * 3. on reregister increment new socket and decrement old one
-     */
-
-//    INFO("SENDING NOTIFICATION TO %s:%d\n", ip, port);
     return 1;
-
-//    echo -e "5060\n5070\n" | ssh -p1111 192.168.0.31 "cat > /root/notify.dopici"
-//    system(execute command);
-
 }

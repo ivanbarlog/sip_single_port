@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Installing Kamailio - http://www.kamailio.org/wiki/install/4.3.x/git
+
+# add arguments for kamailio instance and if client we'll also need the server IP:port
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root"
+  exit
+fi
+
+read -p "MODE (S for server OR C for client): " MODE
+
+if [[ $MODE != "S" && $MODE != "C" ]]; then
+  echo "Invalid MODE, please select S for server or C for client"
+  exit
+fi
+
+# install requirements
+apt-get install git-core gcc flex bison libmysqlclient-dev make php-cli
+
+# prepare source directory
+mkdir -p /usr/local/src
+cd /usr/local/src
+
+# clone kamailio
+mkdir kamailio
+chown $SUDO_USER kamailio
+sudo -u $SUDO_USER git clone --depth 1 git@github.com:kamailio/kamailio.git kamailio
+cd kamailio
+sudo -u $SUDO_USER git checkout -b 4.3 origin/4.3
+cd ..
+
+# clone sip_single_port module
+sudo -u $SUDO_USER git clone git@github.com:ivanbarlog/sip_single_port.git
+ln -s ../kamailio/modules/sip_single_port sip_single_port
+cd kamailio
+
+# add necessary modules to config; compile & install
+make include_modules="db_mysql sip_single_port" cfg
+make all
+make install
+
+# create mysql database
+mv /usr/local/etc/kamailio /usr/local/etc/kamailio.original
+cp -R /usr/local/src/sip_single_port/kamailio-config/kamailio$MODE /usr/local/etc/kamailio
+
+echo "Don't forget to set up listening IP:port's"
+
+if [ "$MODE" -ne "C" ]; then
+  sudo -u $SUDO_USER kamdbctl create
+
+  # create users
+  echo "kamailio password for MySQL is 'kamailiorw'"
+  sudo -u $SUDO_USER kamctl add bob Bob123
+  sudo -u $SUDO_USER kamctl add alice Alice123
+else
+  echo "Don't forget to set up SERVER IP:port in kamailio-local.cfg"
+fi
+

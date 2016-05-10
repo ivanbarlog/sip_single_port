@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root"
+  exit
+fi
+
+read -p "IP address from which you want to drop packets: " IP
+
+iptables -A INPUT -s $IP -j DROP; sleep 2; iptables -D INPUT -s $IP -j DROP
+
